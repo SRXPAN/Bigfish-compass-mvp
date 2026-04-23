@@ -1,0 +1,377 @@
+// src/services/auth.service.ts
+import bcrypt from 'bcryptjs';
+import { prisma } from '../db.js';
+import { createTokenPair, refreshTokens, revokeRefreshToken, revokeAllUserTokens, generateRandomToken } from './token.service.js';
+import { sendVerificationEmail, sendPasswordResetEmail, sendPasswordChangedEmail } from './email.service.js';
+import { AppError } from '../utils/AppError.js';
+import { auditLog, AuditActions, AuditResources } from './audit.service.js';
+const BCRYPT_ROUNDS = 12;
+const VERIFICATION_TOKEN_EXPIRES_HOURS = 24;
+const PASSWORD_RESET_TOKEN_EXPIRES_HOURS = 1;
+/**
+ * Реєстрація нового користувача
+ */
+export async function registerUser(data, userAgent, ip) {
+    const { name, email, password } = data;
+    // Перевірка на існуючого користувача
+    const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    if (exists) {
+        // SECURITY FIX: Явно повідомляємо про конфлікт, щоб фронтенд міг правильно обробити
+        throw AppError.conflict('Email already in use');
+    }
+    // Хешуємо пароль
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    // Створюємо користувача
+    const user = await prisma.user.create({
+        data: {
+            name: name.trim(),
+            email: email.toLowerCase().trim(),
+            password: hash,
+            role: 'STUDENT',
+            isPremium: true,
+            emailVerified: false,
+        },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            xp: true,
+            emailVerified: true,
+        },
+    });
+    // Створюємо токен верифікації email
+    await createEmailVerificationToken(email);
+    // Створюємо токени
+    const tokens = await createTokenPair({ id: user.id, name: user.name, email: user.email, role: user.role }, userAgent, ip);
+    await auditLog({
+        userId: user.id,
+        action: AuditActions.CREATE,
+        resource: AuditResources.USER,
+        resourceId: user.id,
+        metadata: { email },
+        ip,
+        userAgent,
+    });
+    return { user: { ...user, role: user.role }, tokens };
+}
+/**
+ * Вхід користувача
+ */
+export async function loginUser(data, userAgent, ip) {
+    const { email, password } = data;
+    const user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase().trim() },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            xp: true,
+            password: true,
+            emailVerified: true,
+        },
+    });
+    if (!user) {
+        throw new Error('Invalid credentials');
+    }
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+        throw new Error('Invalid credentials');
+    }
+    // Створюємо токени
+    const tokens = await createTokenPair({ id: user.id, name: user.name, email: user.email, role: user.role }, userAgent, ip);
+    await auditLog({
+        userId: user.id,
+        action: AuditActions.LOGIN,
+        resource: AuditResources.USER,
+        resourceId: user.id,
+        metadata: { email, ip },
+        ip,
+        userAgent,
+    });
+    return {
+        user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            xp: user.xp,
+            emailVerified: user.emailVerified,
+        },
+        tokens
+    };
+}
+/**
+ * Оновлення токенів
+ */
+export async function refreshUserTokens(refreshToken, userAgent, ip) {
+    return refreshTokens(refreshToken, userAgent, ip);
+}
+/**
+ * Вихід (відкликання refresh токена)
+ */
+export async function logoutUser(refreshToken) {
+    await revokeRefreshToken(refreshToken);
+}
+/**
+ * Вихід з усіх пристроїв
+ */
+export async function logoutAllDevices(userId) {
+    await revokeAllUserTokens(userId);
+    await auditLog({
+        userId,
+        action: AuditActions.LOGOUT,
+        resource: AuditResources.USER,
+        resourceId: userId,
+    });
+}
+/**
+ * Створює токен для верифікації email
+ */
+export async function createEmailVerificationToken(email) {
+    const token = generateRandomToken();
+    const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_EXPIRES_HOURS * 60 * 60 * 1000);
+    // Видаляємо старі токени для цього email
+    await prisma.emailVerificationToken.deleteMany({ where: { email } });
+    await prisma.emailVerificationToken.create({
+        data: { email, token, expiresAt },
+    });
+    // Відправляємо email
+    await sendVerificationEmail(email, token);
+    return token;
+}
+/**
+ * Верифікує email за токеном
+ */
+export async function verifyEmail(token) {
+    const record = await prisma.emailVerificationToken.findUnique({
+        where: { token },
+    });
+    if (!record || record.expiresAt < new Date()) {
+        return false;
+    }
+    // Оновлюємо користувача
+    await prisma.user.updateMany({
+        where: { email: record.email },
+        data: { emailVerified: true },
+    });
+    // Видаляємо токен
+    await prisma.emailVerificationToken.delete({ where: { id: record.id } });
+    await auditLog({
+        userId: undefined,
+        action: AuditActions.UPDATE,
+        resource: AuditResources.USER,
+        metadata: { email: record.email },
+    });
+    return true;
+}
+/**
+ * Запит на скидання паролю
+ */
+export async function requestPasswordReset(email) {
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    // Завжди повертаємо true щоб не розкривати існування email
+    if (!user) {
+        return true;
+    }
+    const token = generateRandomToken();
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_EXPIRES_HOURS * 60 * 60 * 1000);
+    // Видаляємо старі токени
+    await prisma.passwordResetToken.deleteMany({ where: { email } });
+    await prisma.passwordResetToken.create({
+        data: { email, token, expiresAt },
+    });
+    await sendPasswordResetEmail(email, token);
+    await auditLog({
+        userId: user.id,
+        action: AuditActions.UPDATE,
+        resource: AuditResources.USER,
+        resourceId: user.id,
+        metadata: { email },
+    });
+    return true;
+}
+/**
+ * Скидання паролю за токеном
+ */
+export async function resetPassword(token, newPassword) {
+    const record = await prisma.passwordResetToken.findUnique({
+        where: { token },
+    });
+    if (!record || record.expiresAt < new Date() || record.used) {
+        return false;
+    }
+    const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    // Транзакція: оновлюємо пароль, позначаємо токен використаним, відкликаємо всі сесії
+    await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+            where: { email: record.email },
+            data: { password: hash },
+        });
+        await tx.passwordResetToken.update({
+            where: { id: record.id },
+            data: { used: true },
+        });
+        // Відкликаємо всі refresh токени (logout з усіх пристроїв)
+        const user = await tx.user.findUnique({ where: { email: record.email } });
+        if (user) {
+            await tx.refreshToken.updateMany({
+                where: { userId: user.id, revokedAt: null },
+                data: { revokedAt: new Date() },
+            });
+        }
+    });
+    await sendPasswordChangedEmail(record.email);
+    await auditLog({
+        userId: undefined,
+        action: AuditActions.UPDATE,
+        resource: AuditResources.USER,
+        metadata: { email: record.email },
+    });
+    return true;
+}
+/**
+ * Зміна паролю (потрібен старий пароль)
+ */
+export async function changePassword(userId, currentPassword, newPassword) {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { password: true, email: true },
+    });
+    if (!user) {
+        throw new Error('User not found');
+    }
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+        throw new Error('Current password is incorrect');
+    }
+    const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await prisma.user.update({
+        where: { id: userId },
+        data: { password: hash },
+    });
+    await sendPasswordChangedEmail(user.email);
+    await auditLog({
+        userId,
+        action: AuditActions.UPDATE,
+        resource: AuditResources.USER,
+        resourceId: userId,
+    });
+    return true;
+}
+/**
+ * Повторне відправлення email верифікації
+ */
+export async function resendVerificationEmail(email) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || user.emailVerified) {
+        return false;
+    }
+    await createEmailVerificationToken(email);
+    return true;
+}
+/**
+ * Видалення акаунту користувача (GDPR Right to be Forgotten)
+ * Каскадно видаляє всі дані користувача
+ * Soft-deletes user by renaming email to free it up for future registration
+ */
+export async function deleteUser(userId) {
+    // Перевіряємо існування користувача
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true }
+    });
+    if (!user) {
+        throw AppError.notFound('User not found');
+    }
+    // Generate deleted email to free up the original email for future registration
+    const timestamp = Date.now();
+    const deletedEmail = `deleted_${timestamp}_${user.email}`;
+    // Використовуємо транзакцію для каскадного видалення
+    await prisma.$transaction(async (tx) => {
+        // Видаляємо токени авторизації
+        await tx.refreshToken.deleteMany({ where: { userId } });
+        // Видаляємо відповіді на квізи
+        await tx.answer.deleteMany({ where: { userId } });
+        // Видаляємо спроби проходження квізів
+        await tx.quizAttempt.deleteMany({ where: { userId } });
+        // Видаляємо токени верифікації email
+        await tx.emailVerificationToken.deleteMany({ where: { email: user.email } });
+        // Видаляємо токени скидання паролю
+        await tx.passwordResetToken.deleteMany({ where: { email: user.email } });
+        // Видаляємо файли користувача (опціонально можна залишити з uploadedById = null)
+        await tx.file.updateMany({
+            where: { uploadedById: userId },
+            data: { uploadedById: null }
+        });
+        // Аудит лог
+        await tx.auditLog.create({
+            data: {
+                userId,
+                action: 'DELETE',
+                resource: 'user',
+                resourceId: userId,
+                metadata: { email: user.email, reason: 'User requested account deletion' }
+            }
+        });
+        // Soft-delete: rename email to free up original for future registration + set deletedAt
+        await tx.user.update({
+            where: { id: userId },
+            data: {
+                email: deletedEmail,
+                deletedAt: new Date(),
+                // Optional: clear password for security
+                password: `deleted_${timestamp}`,
+            }
+        });
+    });
+    return true;
+}
+// Add imports
+import { deleteFile } from './storage.service.js';
+/**
+ * Оновлення аватара користувача
+ */
+export async function updateUserAvatar(userId, fileId) {
+    // 1. Verify file exists
+    const file = await prisma.file.findUnique({ where: { id: fileId } });
+    if (!file)
+        throw AppError.badRequest('File not found');
+    // Optional: Check file ownership if file is private
+    // if (file.uploadedById !== userId) throw AppError.forbidden('Access denied')
+    // 2. Get current user to cleanup old avatar
+    const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { avatarFile: true }
+    });
+    // 3. Cleanup old avatar if exists and different
+    if (currentUser?.avatarId && currentUser.avatarId !== fileId && currentUser.avatarFile?.key) {
+        // Non-blocking cleanup
+        deleteFile(currentUser.avatarFile.key).catch(err => console.error('Failed to cleanup old avatar:', err));
+    }
+    // 4. Update user
+    return prisma.user.update({
+        where: { id: userId },
+        data: { avatarId: fileId },
+        select: {
+            id: true, name: true, email: true, role: true, xp: true,
+            avatarId: true, emailVerified: true,
+            avatarFile: { select: { id: true, key: true, mimeType: true } }
+        },
+    });
+}
+/**
+ * Видалення аватара
+ */
+export async function removeUserAvatar(userId) {
+    return prisma.user.update({
+        where: { id: userId },
+        data: { avatarId: null },
+        select: {
+            id: true, name: true, email: true, role: true, xp: true,
+            avatarId: true, emailVerified: true,
+            avatarFile: { select: { id: true, key: true, mimeType: true } }
+        },
+    });
+}

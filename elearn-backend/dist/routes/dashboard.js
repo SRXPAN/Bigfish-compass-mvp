@@ -1,0 +1,188 @@
+// src/routes/dashboard.ts
+import { Router } from 'express';
+import { prisma } from '../db.js';
+import { requireAuth } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
+import { calculateStreak, getRecentActivity, getViewedMaterialIds, } from '../services/progress.service.js';
+import { dailyGoalsDatabase } from '../config/dailyGoals.js';
+import { getTipOfTheDay, getWeakSpotAdvice } from '../config/weakSpots.js';
+const router = Router();
+/**
+ * GET /api/dashboard/summary?lang=EN
+ * Returns dashboard data for authenticated user with REAL streak & progress data
+ */
+router.get('/summary', requireAuth, asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const lang = (req.query.lang || 'EN');
+    // 0. Get user info (for XP) - Real-time from database
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { xp: true }
+    });
+    const userXp = user?.xp ?? 0;
+    // Get real completed lessons count from database
+    const completedLessonsCount = await prisma.materialView.count({
+        where: { userId }
+    });
+    // 1. Get REAL streak data (not hardcoded)
+    const streakData = await calculateStreak(userId);
+    // 2. Get recent activity (last 7 days)
+    const activities = await getRecentActivity(userId, 7);
+    const totalTimeSpent = activities.reduce((sum, a) => sum + a.timeSpent, 0);
+    const totalQuizAttempts = activities.reduce((sum, a) => sum + a.quizAttempts, 0);
+    // 3. Get viewed materials for progress calculation
+    const viewedMaterialIds = new Set(await getViewedMaterialIds(userId));
+    // 4. Get recent topics with REAL progress calculation
+    const recentViews = await prisma.materialView.findMany({
+        where: { userId },
+        orderBy: { viewedAt: 'desc' },
+        take: 50,
+        select: { materialId: true, viewedAt: true },
+    });
+    // Generate 7-day history for streak visualization (UTC-safe)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const activityDates = new Set(activities.map(a => new Date(a.date).toISOString().split('T')[0]));
+    const history = [];
+    const historyDates = [];
+    for (let i = 6; i >= 0; i--) {
+        const checkDate = new Date(today);
+        checkDate.setUTCDate(checkDate.getUTCDate() - i);
+        const dateStr = checkDate.toISOString().split('T')[0];
+        historyDates.push(dateStr);
+        history.push(activityDates.has(dateStr));
+    }
+    // Daily goals - localized by requested language
+    const findGoalText = (id) => {
+        const goal = dailyGoalsDatabase.find(g => g.id === id);
+        return goal?.translations?.[lang] || goal?.translations?.EN || 'Goal';
+    };
+    const dailyGoalsData = [
+        { id: 'g1', text: findGoalText('g1'), isCompleted: totalQuizAttempts > 0 },
+        { id: 'g6', text: findGoalText('g6'), isCompleted: completedLessonsCount > 0 },
+        { id: 'g18', text: findGoalText('g18'), isCompleted: totalTimeSpent >= 1800 }
+    ];
+    if (recentViews.length === 0) {
+        return res.json({
+            userXp,
+            completedLessons: completedLessonsCount,
+            stats: {
+                streak: { ...streakData, history, historyDates },
+                activity: {
+                    timeSpent: 0,
+                    quizAttempts: 0
+                }
+            },
+            recentTopics: [],
+            dailyGoals: dailyGoalsData,
+            weakSpots: [],
+            tipOfTheDay: getTipOfTheDay(lang),
+            achievements: [
+                { id: 'first_material', name: 'First Steps', description: 'View your first material', earned: false },
+                { id: 'quiz_master', name: 'Quiz Master', description: 'Complete 5 quizzes', earned: false },
+                { id: 'streak_7', name: '7-Day Streak', description: 'Maintain a 7-day streak', earned: false }
+            ]
+        });
+    }
+    // Get materials to identify topics
+    const materials = await prisma.material.findMany({
+        where: { id: { in: recentViews.map(v => v.materialId) } },
+        select: { id: true, topicId: true }
+    });
+    // Extract unique topics (preserving recency)
+    const uniqueTopicIds = new Set();
+    const topicLastViewedMap = new Map();
+    for (const view of recentViews) {
+        const mat = materials.find(m => m.id === view.materialId);
+        if (mat && mat.topicId) {
+            if (!uniqueTopicIds.has(mat.topicId)) {
+                uniqueTopicIds.add(mat.topicId);
+                topicLastViewedMap.set(mat.topicId, view.viewedAt);
+            }
+        }
+        if (uniqueTopicIds.size >= 4)
+            break;
+    }
+    // Fetch topic details
+    const topicsData = await prisma.topic.findMany({
+        where: { id: { in: Array.from(uniqueTopicIds) } },
+        select: {
+            id: true,
+            name: true,
+            nameJson: true,
+            slug: true,
+            materials: { select: { id: true } }
+        }
+    });
+    const recentTopics = topicsData
+        .map(topic => {
+        const viewedCount = topic.materials.filter(m => viewedMaterialIds.has(m.id)).length;
+        const totalCount = topic.materials.length;
+        const progress = totalCount > 0 ? Math.round((viewedCount / totalCount) * 100) : 0;
+        return {
+            id: topic.id,
+            name: topic.name,
+            nameJson: topic.nameJson,
+            slug: topic.slug,
+            progress,
+            totalMaterials: totalCount,
+            viewedMaterials: viewedCount,
+            lastViewedAt: topicLastViewedMap.get(topic.id) || new Date(0)
+        };
+    })
+        .sort((a, b) => b.lastViewedAt.getTime() - a.lastViewedAt.getTime());
+    // Get weak spots: Topics where user scores are below 70%
+    const lowScoringQuizzes = await prisma.quizAttempt.groupBy({
+        by: ['quizId'],
+        where: {
+            userId,
+            score: { lt: 70 }
+        },
+        _avg: { score: true },
+        orderBy: { _avg: { score: 'asc' } },
+        take: 3
+    });
+    const weakSpotsList = [];
+    for (const quiz of lowScoringQuizzes) {
+        const quizData = await prisma.quiz.findUnique({
+            where: { id: quiz.quizId },
+            select: { title: true, titleJson: true, topic: { select: { name: true } } }
+        });
+        if (quizData?.topic) {
+            const score = Math.round(quiz._avg?.score ?? 0);
+            weakSpotsList.push({
+                topic: quizData.topic.name,
+                advice: getWeakSpotAdvice(score, lang)
+            });
+        }
+    }
+    // Tip of the Day - localized
+    const tipOfTheDay = getTipOfTheDay(lang);
+    res.json({
+        userXp,
+        completedLessons: completedLessonsCount,
+        stats: {
+            streak: {
+                current: streakData.current,
+                longest: streakData.longest,
+                lastActiveDate: streakData.lastActiveDate,
+                history,
+                historyDates
+            },
+            activity: {
+                timeSpent: totalTimeSpent,
+                quizAttempts: totalQuizAttempts
+            }
+        },
+        recentTopics,
+        dailyGoals: dailyGoalsData,
+        weakSpots: weakSpotsList,
+        tipOfTheDay,
+        achievements: [
+            { id: 'first_material', name: 'First Steps', description: 'View your first material', earned: completedLessonsCount > 0 },
+            { id: 'quiz_master', name: 'Quiz Master', description: 'Complete 5 quizzes', earned: totalQuizAttempts >= 5 },
+            { id: 'streak_7', name: '7-Day Streak', description: 'Maintain a 7-day streak', earned: streakData.current >= 7 }
+        ]
+    });
+}));
+export default router;
