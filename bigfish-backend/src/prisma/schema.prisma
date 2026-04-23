@@ -22,15 +22,11 @@ model User {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @default(now()) @updatedAt
   answers          Answer[]
-  viewedMaterials  String[]       @default([])
-  topicsCreated    Topic[]        @relation("TopicCreator")
-  materialsCreated Material[]     @relation("MaterialCreator")
   quizzesCreated   Quiz[]         @relation("QuizCreator")
   quizAttempts     QuizAttempt[]
   refreshTokens    RefreshToken[]
   filesUploaded    File[]         @relation("FileUploader")
   auditLogs        AuditLog[]
-  dailyGoals       DailyGoalTemplate[]
   
   // BigFish Compass relationships
   adminOfSchool    School?        @relation("SchoolAdmin")
@@ -87,12 +83,9 @@ model Topic {
   parentId    String?
   parent      Topic?     @relation("TopicTree", fields: [parentId], references: [id])
   children    Topic[]    @relation("TopicTree")
-  materials   Material[]
   quizzes     Quiz[]
   status      Status     @default(Draft)
   publishedAt DateTime?
-  createdById String?
-  createdBy   User?      @relation("TopicCreator", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @default(now()) @updatedAt
 
@@ -100,45 +93,10 @@ model Topic {
   @@index([parentId])
 }
 
-model Material {
-  id            String       @id @default(cuid())
-  title         String // Fallback title (EN)
-  titleJson     Json? // {"UA": "...", "PL": "...", "EN": "..."}
-  titleCache    Json?        // {"UA": "...", "EN": "..."}
-  type          MaterialType
-  url           String?      // Fallback URL (EN)
-  urlJson       Json?        @map("urlCache") // {"UA": "s3/file_ua.pdf", "EN": "s3/file_en.pdf"}
-  fileId        String?      // Reference to File for pdf/video/image
-  file          File?        @relation(fields: [fileId], references: [id])
-  content       String?      // Fallback content (EN)
-  contentJson   Json? // {"UA": "...", "PL": "...", "EN": "..."}
-  contentCache  Json?        // {"UA": "# Привіт", "EN": "# Hello"}
-  lang          Lang         @default(EN) // Primary language of material
-  topic         Topic        @relation(fields: [topicId], references: [id])
-  topicId       String
-  views         Int          @default(0)
-  status        Status       @default(Draft)
-  publishedAt   DateTime?
-  createdById   String?
-  createdBy     User?        @relation("MaterialCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @default(now()) @updatedAt
-  deletedAt     DateTime?
-
-  @@index([topicId])
-}
-
 enum Lang {
   UA
   PL
   EN
-}
-
-enum MaterialType {
-  pdf
-  video
-  link
-  text
 }
 
 model Quiz {
@@ -303,20 +261,6 @@ model EmailVerificationToken {
 // ACTIVITY & PROGRESS MODELS
 // ============================================
 
-// Переглянуті матеріали (замість масиву в User)
-model MaterialView {
-  id         String   @id @default(cuid())
-  userId     String
-  materialId String
-  viewedAt   DateTime @default(now())
-  timeSpent  Int? // Час перегляду в секундах
-
-  @@unique([userId, materialId])
-  @@index([userId])
-  @@index([materialId])
-  @@index([viewedAt])
-}
-
 // Активність користувача (для аналітики)
 model UserActivity {
   id              String   @id @default(cuid())
@@ -368,20 +312,6 @@ model UiTranslation {
 // - titleCache: {"UA": "...", "EN": "...", "PL": "..."}
 // - urlJson, contentCache, descCache (similar structure)
 
-// Щоденні цілі з перекладами
-model DailyGoalTemplate {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  
-  date        String   // Формат "YYYY-MM-DD"
-  templateId  String   // Наприклад "g1", "g15" з твого файлу
-  isCompleted Boolean  @default(false)
-  progress    Int      @default(0) // Якщо ціль "пройти 3 квізи", тут буде 1, 2 або 3
-
-  @@unique([userId, date, templateId])
-}
-
 // Слабкі місця / рекомендації
 model WeakSpotTemplate {
   id           String   @id @default(cuid())
@@ -427,7 +357,6 @@ model File {
   visibility   Visibility   @default(PRIVATE)
   uploadedById String?
   uploadedBy   User?        @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
-  materials    Material[]
   userAvatars  User[]       @relation("UserAvatar")
   confirmed    Boolean      @default(false) // True after upload confirmed
   createdAt    DateTime     @default(now())
