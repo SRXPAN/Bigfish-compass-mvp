@@ -1,0 +1,723 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String         @id @default(cuid())
+  email            String         @unique
+  name             String
+  password         String
+  avatarId         String?        // Reference to File
+  avatarFile       File?          @relation("UserAvatar", fields: [avatarId], references: [id])
+  role             Role           @default(STUDENT)
+  xp               Int            @default(0)
+  emailVerified    Boolean        @default(false)
+  isPremium        Boolean        @default(true) // All users are premium (free version)
+  deletedAt        DateTime?      // For soft delete - freed email when deleted
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+  answers          Answer[]
+  viewedMaterials  String[]       @default([])
+  topicsCreated    Topic[]        @relation("TopicCreator")
+  materialsCreated Material[]     @relation("MaterialCreator")
+  quizzesCreated   Quiz[]         @relation("QuizCreator")
+  quizAttempts     QuizAttempt[]
+  refreshTokens    RefreshToken[]
+  filesUploaded    File[]         @relation("FileUploader")
+  auditLogs        AuditLog[]
+  dailyGoals       DailyGoalTemplate[]
+  
+  // BigFish Compass relationships
+  adminOfSchool    School?        @relation("SchoolAdmin")
+  counselorSchoolId String?
+  counselorSchool  School?        @relation("SchoolCounselor", fields: [counselorSchoolId], references: [id], onDelete: SetNull)
+  studentSchoolId  String?
+  studentSchool    School?        @relation("SchoolStudent", fields: [studentSchoolId], references: [id], onDelete: SetNull)
+  
+  assessmentSessions AssessmentSession[] @relation("AssessmentSessions")
+  studentReports   Report[]       @relation("StudentReports")
+
+  @@index([role])
+
+  @@index([createdAt])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+enum Role {
+  STUDENT
+  COUNSELOR
+  ADMIN
+}
+
+
+enum Category {
+  Programming
+  Mathematics
+  Databases
+  Networks
+  WebDevelopment
+  MobileDevelopment
+  MachineLearning
+  Security
+  DevOps
+  OperatingSystems
+}
+
+enum Status {
+  Draft
+  Published
+}
+
+model Topic {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String // Fallback name (EN) - kept for backward compat
+  nameJson    Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  titleCache  Json?      // {"UA": "...", "EN": "..."}
+  description String
+  descJson    Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  descCache   Json?      // {"UA": "...", "EN": "..."}
+  category    Category   @default(Programming)
+  parentId    String?
+  parent      Topic?     @relation("TopicTree", fields: [parentId], references: [id])
+  children    Topic[]    @relation("TopicTree")
+  materials   Material[]
+  quizzes     Quiz[]
+  status      Status     @default(Draft)
+  publishedAt DateTime?
+  createdById String?
+  createdBy   User?      @relation("TopicCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt
+
+  @@index([category])
+  @@index([parentId])
+}
+
+model Material {
+  id            String       @id @default(cuid())
+  title         String // Fallback title (EN)
+  titleJson     Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  titleCache    Json?        // {"UA": "...", "EN": "..."}
+  type          MaterialType
+  url           String?      // Fallback URL (EN)
+  urlJson       Json?        @map("urlCache") // {"UA": "s3/file_ua.pdf", "EN": "s3/file_en.pdf"}
+  fileId        String?      // Reference to File for pdf/video/image
+  file          File?        @relation(fields: [fileId], references: [id])
+  content       String?      // Fallback content (EN)
+  contentJson   Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  contentCache  Json?        // {"UA": "# Привіт", "EN": "# Hello"}
+  lang          Lang         @default(EN) // Primary language of material
+  topic         Topic        @relation(fields: [topicId], references: [id])
+  topicId       String
+  views         Int          @default(0)
+  status        Status       @default(Draft)
+  publishedAt   DateTime?
+  createdById   String?
+  createdBy     User?        @relation("MaterialCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @default(now()) @updatedAt
+  deletedAt     DateTime?
+
+  @@index([topicId])
+}
+
+enum Lang {
+  UA
+  PL
+  EN
+}
+
+enum MaterialType {
+  pdf
+  video
+  link
+  text
+}
+
+model Quiz {
+  id            String        @id @default(cuid())
+  title         String // Fallback title (EN)
+  titleJson     Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  titleCache    Json?         // {"UA": "...", "EN": "..."}
+  durationSec   Int           @default(60)
+  topicId       String
+  topic         Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  questions     Question[]
+  attempts      QuizAttempt[]
+  status        Status        @default(Draft)
+  publishedAt   DateTime?
+  createdById   String?
+  createdBy     User?         @relation("QuizCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
+  deletedAt     DateTime?
+
+  @@index([topicId])
+}
+
+model Question {
+  id                 String     @id @default(cuid())
+  text               String // Fallback text (EN)
+  textJson           Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  explanation        String?
+  explanationJson    Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  tags               String[]
+  difficulty         Difficulty
+  quizId             String
+  quiz               Quiz       @relation(fields: [quizId], references: [id])
+  options            Option[]
+  answers            Answer[]
+
+  @@index([quizId])
+}
+
+model Option {
+  id           String   @id @default(cuid())
+  text         String // Fallback text (EN)
+  textJson     Json? // {"UA": "...", "PL": "...", "EN": "..."}
+  correct      Boolean  @default(false)
+  questionId   String
+  question     Question @relation(fields: [questionId], references: [id])
+  answers      Answer[]
+
+  @@index([questionId])
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  optionId   String?
+  option     Option?  @relation(fields: [optionId], references: [id])
+  isCorrect  Boolean
+  createdAt  DateTime @default(now())
+  attemptId  String?
+  attempt    QuizAttempt? @relation(fields: [attemptId], references: [id])
+
+  @@index([userId])
+  @@index([questionId])
+  @@index([userId, questionId]) // Композитний індекс для швидкого пошуку відповідей користувача
+  @@index([createdAt]) // Індекс для сортування за датою
+  @@index([attemptId])
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  score     Int      // correct answers count
+  total     Int      // total questions
+  xpEarned  Int      @default(0)
+  createdAt DateTime @default(now())
+  answers   Answer[]
+
+  @@index([userId])
+  @@index([quizId])
+  @@index([userId, createdAt])
+}
+
+enum Difficulty {
+  Easy
+  Medium
+  Hard
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  userEmail  String
+  amount     Int
+  currency   String
+  provider   String
+  providerId String
+  status     String
+  createdAt  DateTime @default(now())
+}
+
+model InviteToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ============================================
+// SESSION & AUTH MODELS
+// ============================================
+
+// Refresh токени для безпечної автентифікації
+model RefreshToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// Токени для скидання паролю
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+// Токени для верифікації email
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+// ============================================
+// ACTIVITY & PROGRESS MODELS
+// ============================================
+
+// Переглянуті матеріали (замість масиву в User)
+model MaterialView {
+  id         String   @id @default(cuid())
+  userId     String
+  materialId String
+  viewedAt   DateTime @default(now())
+  timeSpent  Int? // Час перегляду в секундах
+
+  @@unique([userId, materialId])
+  @@index([userId])
+  @@index([materialId])
+  @@index([viewedAt])
+}
+
+// Активність користувача (для аналітики)
+model UserActivity {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime @db.Date // Тільки дата без часу
+  timeSpent       Int      @default(0) // Час в секундах
+  quizAttempts    Int      @default(0)
+  materialsViewed Int      @default(0)
+  goalsCompleted  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+// ============================================
+// TRANSLATION MODELS
+// ============================================
+
+// Версіонування перекладів для кешування (ETag)
+model TranslationVersion {
+  id        String   @id @default(cuid())
+  namespace String   @unique // "common", "auth", "quiz", etc.
+  version   Int      @default(1)
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+// UI переклади (кнопки, меню, повідомлення)
+model UiTranslation {
+  id           String   @id @default(cuid())
+  key          String   @unique // "nav.dashboard", "quiz.title", etc.
+  namespace    String   @default("common") // common, auth, quiz, materials, editor, dashboard
+  translations Json     // {"UA": "...", "PL": "...", "EN": "..."}
+  description  String?  // Опис для редактора перекладів
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([key])
+  @@index([namespace])
+}
+
+// ============================================
+// I18N TABLES REMOVED - Using JSON Cache Fields
+// ============================================
+// The normalized I18nKey/I18nValue tables have been removed.
+// Localization now uses JSON cache fields directly in Topic/Material/Quiz:
+// - titleCache: {"UA": "...", "EN": "...", "PL": "..."}
+// - urlJson, contentCache, descCache (similar structure)
+
+// Щоденні цілі з перекладами
+model DailyGoalTemplate {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  date        String   // Формат "YYYY-MM-DD"
+  templateId  String   // Наприклад "g1", "g15" з твого файлу
+  isCompleted Boolean  @default(false)
+  progress    Int      @default(0) // Якщо ціль "пройти 3 квізи", тут буде 1, 2 або 3
+
+  @@unique([userId, date, templateId])
+}
+
+// Слабкі місця / рекомендації
+model WeakSpotTemplate {
+  id           String   @id @default(cuid())
+  category     String // algorithms, sql, oop, etc.
+  weight       Int      @default(1)
+  translations Json // {topic: {UA,PL,EN}, advice: {UA,PL,EN}}
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+}
+
+// Досягнення
+model AchievementTemplate {
+  id           String   @id @default(cuid())
+  code         String   @unique // "first_quiz", "week_streak", etc.
+  icon         String // emoji or icon name
+  translations Json // {name: {UA,PL,EN}, description: {UA,PL,EN}}
+  xpReward     Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+}
+
+// Категорії з перекладами
+model CategoryTranslation {
+  id           String   @id @default(cuid())
+  category     Category @unique
+  translations Json // {"UA": "Програмування", "PL": "...", "EN": "..."}
+}
+
+// ============================================
+// FILE STORAGE MODELS
+// ============================================
+
+// Файли (S3/R2 storage metadata)
+model File {
+  id           String       @id @default(cuid())
+  key          String       @unique // S3 key: "files/abc123.pdf"
+  bucket       String       @default("elearn-files")
+  originalName String       // Original filename
+  mimeType     String       // "application/pdf", "image/jpeg", etc.
+  size         Int          // Size in bytes
+  visibility   Visibility   @default(PRIVATE)
+  uploadedById String?
+  uploadedBy   User?        @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  materials    Material[]
+  userAvatars  User[]       @relation("UserAvatar")
+  confirmed    Boolean      @default(false) // True after upload confirmed
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now()) @updatedAt
+
+  @@index([uploadedById])
+  @@index([visibility])
+  @@index([mimeType])
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+  SIGNED // Requires signed URL
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // "CREATE", "UPDATE", "DELETE", "LOGIN", "LOGOUT"
+  resource   String   // "topic", "material", "quiz", "user", "file"
+  resourceId String?
+  metadata   Json?    // Additional context
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+// ============================================
+// BIGFISH COMPASS MVP MODELS
+// ============================================
+
+// Школи та організації
+model School {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  email       String
+  country     String?   // UA, PL, etc.
+  adminId     String    @unique
+  admin       User      @relation("SchoolAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  counselors  User[]    @relation("SchoolCounselor")
+  students    User[]    @relation("SchoolStudent")
+  accessCodes AccessCode[]
+  subscription Subscription?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@index([slug])
+  @@index([country])
+}
+
+// Кодекси доступу для шкіл (наприклад: SCHOOL2025)
+model AccessCode {
+  id          String   @id @default(cuid())
+  code        String   @unique @db.VarChar(10) // Верхній регістр: "CODE123"
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  maxActivations Int    @default(999) // -1 = unlimited
+  activations    Int    @default(0)
+  expiresAt      DateTime?
+  isActive       Boolean @default(true)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  @@index([code])
+  @@index([schoolId])
+  @@index([expiresAt])
+}
+
+// Підписка/Біллінг (Stripe)
+model Subscription {
+  id               String   @id @default(cuid())
+  schoolId         String   @unique
+  school           School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  stripeCustomerId String?  @unique
+  stripePriceId    String?
+  stripeSubscriptionId String? @unique
+  
+  status           SubscriptionStatus @default(INACTIVE) // inactive, active, cancelled, past_due
+  currentPeriodStart DateTime?
+  currentPeriodEnd DateTime?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@index([stripeCustomerId])
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+}
+
+// Шаблон оцінювання (assessment template)
+model AssessmentTemplate {
+  id              String   @id @default(cuid())
+  name            String   // Fallback name (EN)
+  nameJson        Json     // {"UA": "...", "PL": "...", "EN": "..."}
+  description     String?
+  descriptionJson Json?    // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  locale          Lang     @default(EN) // Primary language
+  durationMinutes Int      @default(30)
+  isActive        Boolean  @default(true)
+  
+  questions       AssessmentQuestion[]
+  sessions        AssessmentSession[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  @@index([isActive])
+}
+
+// Запитання в оцінюванні
+model AssessmentQuestion {
+  id           String   @id @default(cuid())
+  templateId   String
+  template     AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  text         String   // Fallback text (EN)
+  textJson     Json     // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  order        Int      // Порядок показу
+  type         QuestionType @default(SINGLE_CHOICE) // single_choice, multi_choice, scale, text
+  
+  // Для single/multi choice
+  options      Json?    // [{"id": "a", "label": {"UA": "...", "EN": "..."}, "dimensionWeights": {"integrity": 1}}]
+  
+  // Для scale questions (1-5)
+  scaleMin     Int?
+  scaleMax     Int?
+  scaleLabels  Json?    // {"min": {"UA": "...", "EN": "..."}, "max": {"UA": "...", "EN": "..."}}
+  
+  responses    AssessmentResponse[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([templateId])
+  @@index([order])
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  SCALE
+  TEXT
+}
+
+// Сесія оцінювання (студент проходить тест)
+model AssessmentSession {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      User     @relation("AssessmentSessions", fields: [studentId], references: [id], onDelete: Cascade)
+  templateId   String
+  template     AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  status       SessionStatus @default(IN_PROGRESS)
+  locale       Lang    @default(EN)
+  
+  responses    AssessmentResponse[]
+  profileScore ProfileScore?
+  
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  
+  @@index([studentId])
+  @@index([templateId])
+  @@index([status])
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+// Відповідь на запитання
+model AssessmentResponse {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId String
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
+  // Відповідь залежно від типу
+  selectedOptions Json?   // ["a", "c"] для multi-choice; ["a"] для single
+  scaleValue      Int?    // 1-5 для scale
+  textValue       String? // Для text questions
+  
+  answeredAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([questionId])
+}
+
+// Профіль студента (результати оцінювання)
+// Розміри: Integrity, Creativity, Leadership, Communication, Problem-Solving, etc.
+model ProfileScore {
+  id                String   @id @default(cuid())
+  sessionId         String   @unique
+  session           AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId         String
+  
+  // JSON structure: {"integrity": 75, "creativity": 82, ...}
+  dimensionScores   Json     // {dimension: score (0-100)}
+  overallScore      Int      // 0-100
+  
+  topDimensions     String[] // ["creativity", "leadership"] - top 3
+  recommendations   Recommendation[]
+  reports           Report[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  @@index([studentId])
+}
+
+// Рекомендація професії
+model Recommendation {
+  id               String   @id @default(cuid())
+  profileScoreId   String
+  profileScore     ProfileScore @relation(fields: [profileScoreId], references: [id], onDelete: Cascade)
+  
+  careerId         String   // Reference to career ID in content DB
+  careerName       String   // Fallback name
+  careerNameJson   Json     // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  description      String?
+  descriptionJson  Json?    // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  matchScore       Int      // 0-100
+  rationale        String?  // Fallback explanation
+  rationaleJson    Json?    // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  educationPaths   Json     // [{"name": "...", "duration": 4, "cost": "$$"}]
+  resources        Json?    // [{"title": "...", "url": "...", "type": "course|book|mentorship"}]
+  
+  rank             Int      // 1st, 2nd, 3rd recommendation
+  
+  createdAt        DateTime @default(now())
+
+  @@index([profileScoreId])
+  @@index([careerId])
+}
+
+// Звіт для студента (PDF + JSON експорт)
+model Report {
+  id               String   @id @default(cuid())
+  profileScoreId   String
+  profileScore     ProfileScore @relation(fields: [profileScoreId], references: [id], onDelete: Cascade)
+  
+  studentId        String
+  student          User     @relation("StudentReports", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  locale           Lang     @default(EN)
+  
+  // JSON representation
+  contentJson      Json     // Complete report: {profile, recommendations, next_steps, ...}
+  
+  // PDF storage (if generated)
+  pdfUrl           String?  // S3/R2 URL
+  pdfFileId        String?
+  pdfGenerated     Boolean  @default(false)
+  
+  // Email tracking
+  sentToEmail      String?
+  sentAt           DateTime?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@index([studentId])
+  @@index([profileScoreId])
+  @@index([createdAt])
+}
+
