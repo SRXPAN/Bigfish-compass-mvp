@@ -1,25 +1,26 @@
 {
-  "name": "elearn-monorepo",
-  "version": "1.0.0",
+  "name": "bigfish-compass",
+  "version": "0.1.0",
   "private": true,
-  "description": "E-Learning Platform Monorepo",
+  "description": "Career Guidance Platform for Teens (14-18) - BigFish Compass MVP",
   "workspaces": [
     "packages/*",
-    "elearn-backend"
+    "bigfish-backend",
+    "bigfish-front"
   ],
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
-    "dev:backend": "npm run dev -w elearn-backend",
-    "dev:frontend": "npm --prefix elearn-front run dev",
+    "dev:backend": "npm run dev -w bigfish-backend",
+    "dev:frontend": "npm --prefix bigfish-front run dev",
     "build": "npm run build --workspaces --if-present",
-    "build:backend": "npm run build -w elearn-backend",
-    "build:frontend": "npm --prefix elearn-front run build",
+    "build:backend": "npm run build -w bigfish-backend",
+    "build:frontend": "npm --prefix bigfish-front run build",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "prisma:generate": "npm run prisma:generate -w elearn-backend",
-    "prisma:migrate": "npm run prisma:migrate -w elearn-backend",
-    "db:seed": "npm run db:seed -w elearn-backend",
-    "clean": "rimraf node_modules packages/*/node_modules elearn-backend/node_modules elearn-front/node_modules dist"
+    "prisma:generate": "npm run prisma:generate -w bigfish-backend",
+    "prisma:migrate": "npm run prisma:migrate -w bigfish-backend",
+    "db:seed": "npm run db:seed -w bigfish-backend",
+    "clean": "rimraf node_modules packages/*/node_modules bigfish-backend/node_modules bigfish-front/node_modules dist"
   },
   "devDependencies": {
     "rimraf": "^5.0.5",

@@ -31,8 +31,19 @@ model User {
   filesUploaded    File[]         @relation("FileUploader")
   auditLogs        AuditLog[]
   dailyGoals       DailyGoalTemplate[]
+  
+  // BigFish Compass relationships
+  adminOfSchool    School?        @relation("SchoolAdmin")
+  counselorSchoolId String?
+  counselorSchool  School?        @relation("SchoolCounselor", fields: [counselorSchoolId], references: [id], onDelete: SetNull)
+  studentSchoolId  String?
+  studentSchool    School?        @relation("SchoolStudent", fields: [studentSchoolId], references: [id], onDelete: SetNull)
+  
+  assessmentSessions AssessmentSession[] @relation("AssessmentSessions")
+  studentReports   Report[]       @relation("StudentReports")
 
   @@index([role])
+
   @@index([createdAt])
   @@index([email])
   @@index([deletedAt])
@@ -40,9 +51,10 @@ model User {
 
 enum Role {
   STUDENT
-  EDITOR
+  COUNSELOR
   ADMIN
 }
+
 
 enum Category {
   Programming
@@ -453,3 +465,259 @@ model AuditLog {
   @@index([resource])
   @@index([createdAt])
 }
+
+// ============================================
+// BIGFISH COMPASS MVP MODELS
+// ============================================
+
+// Школи та організації
+model School {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  email       String
+  country     String?   // UA, PL, etc.
+  adminId     String    @unique
+  admin       User      @relation("SchoolAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  counselors  User[]    @relation("SchoolCounselor")
+  students    User[]    @relation("SchoolStudent")
+  accessCodes AccessCode[]
+  subscription Subscription?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@index([slug])
+  @@index([country])
+}
+
+// Кодекси доступу для шкіл (наприклад: SCHOOL2025)
+model AccessCode {
+  id          String   @id @default(cuid())
+  code        String   @unique @db.VarChar(10) // Верхній регістр: "CODE123"
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  maxActivations Int    @default(999) // -1 = unlimited
+  activations    Int    @default(0)
+  expiresAt      DateTime?
+  isActive       Boolean @default(true)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  @@index([code])
+  @@index([schoolId])
+  @@index([expiresAt])
+}
+
+// Підписка/Біллінг (Stripe)
+model Subscription {
+  id               String   @id @default(cuid())
+  schoolId         String   @unique
+  school           School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  stripeCustomerId String?  @unique
+  stripePriceId    String?
+  stripeSubscriptionId String? @unique
+  
+  status           SubscriptionStatus @default(INACTIVE) // inactive, active, cancelled, past_due
+  currentPeriodStart DateTime?
+  currentPeriodEnd DateTime?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@index([stripeCustomerId])
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+}
+
+// Шаблон оцінювання (assessment template)
+model AssessmentTemplate {
+  id              String   @id @default(cuid())
+  name            String   // Fallback name (EN)
+  nameJson        Json     // {"UA": "...", "PL": "...", "EN": "..."}
+  description     String?
+  descriptionJson Json?    // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  locale          Lang     @default(EN) // Primary language
+  durationMinutes Int      @default(30)
+  isActive        Boolean  @default(true)
+  
+  questions       AssessmentQuestion[]
+  sessions        AssessmentSession[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  @@index([isActive])
+}
+
+// Запитання в оцінюванні
+model AssessmentQuestion {
+  id           String   @id @default(cuid())
+  templateId   String
+  template     AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  text         String   // Fallback text (EN)
+  textJson     Json     // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  order        Int      // Порядок показу
+  type         QuestionType @default(SINGLE_CHOICE) // single_choice, multi_choice, scale, text
+  
+  // Для single/multi choice
+  options      Json?    // [{"id": "a", "label": {"UA": "...", "EN": "..."}, "dimensionWeights": {"integrity": 1}}]
+  
+  // Для scale questions (1-5)
+  scaleMin     Int?
+  scaleMax     Int?
+  scaleLabels  Json?    // {"min": {"UA": "...", "EN": "..."}, "max": {"UA": "...", "EN": "..."}}
+  
+  responses    AssessmentResponse[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([templateId])
+  @@index([order])
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  SCALE
+  TEXT
+}
+
+// Сесія оцінювання (студент проходить тест)
+model AssessmentSession {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      User     @relation("AssessmentSessions", fields: [studentId], references: [id], onDelete: Cascade)
+  templateId   String
+  template     AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  status       SessionStatus @default(IN_PROGRESS)
+  locale       Lang    @default(EN)
+  
+  responses    AssessmentResponse[]
+  profileScore ProfileScore?
+  
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  
+  @@index([studentId])
+  @@index([templateId])
+  @@index([status])
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+// Відповідь на запитання
+model AssessmentResponse {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId String
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
+  // Відповідь залежно від типу
+  selectedOptions Json?   // ["a", "c"] для multi-choice; ["a"] для single
+  scaleValue      Int?    // 1-5 для scale
+  textValue       String? // Для text questions
+  
+  answeredAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([questionId])
+}
+
+// Профіль студента (результати оцінювання)
+// Розміри: Integrity, Creativity, Leadership, Communication, Problem-Solving, etc.
+model ProfileScore {
+  id                String   @id @default(cuid())
+  sessionId         String   @unique
+  session           AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId         String
+  
+  // JSON structure: {"integrity": 75, "creativity": 82, ...}
+  dimensionScores   Json     // {dimension: score (0-100)}
+  overallScore      Int      // 0-100
+  
+  topDimensions     String[] // ["creativity", "leadership"] - top 3
+  recommendations   Recommendation[]
+  reports           Report[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  @@index([studentId])
+}
+
+// Рекомендація професії
+model Recommendation {
+  id               String   @id @default(cuid())
+  profileScoreId   String
+  profileScore     ProfileScore @relation(fields: [profileScoreId], references: [id], onDelete: Cascade)
+  
+  careerId         String   // Reference to career ID in content DB
+  careerName       String   // Fallback name
+  careerNameJson   Json     // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  description      String?
+  descriptionJson  Json?    // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  matchScore       Int      // 0-100
+  rationale        String?  // Fallback explanation
+  rationaleJson    Json?    // {"UA": "...", "PL": "...", "EN": "..."}
+  
+  educationPaths   Json     // [{"name": "...", "duration": 4, "cost": "$$"}]
+  resources        Json?    // [{"title": "...", "url": "...", "type": "course|book|mentorship"}]
+  
+  rank             Int      // 1st, 2nd, 3rd recommendation
+  
+  createdAt        DateTime @default(now())
+
+  @@index([profileScoreId])
+  @@index([careerId])
+}
+
+// Звіт для студента (PDF + JSON експорт)
+model Report {
+  id               String   @id @default(cuid())
+  profileScoreId   String
+  profileScore     ProfileScore @relation(fields: [profileScoreId], references: [id], onDelete: Cascade)
+  
+  studentId        String
+  student          User     @relation("StudentReports", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  locale           Lang     @default(EN)
+  
+  // JSON representation
+  contentJson      Json     // Complete report: {profile, recommendations, next_steps, ...}
+  
+  // PDF storage (if generated)
+  pdfUrl           String?  // S3/R2 URL
+  pdfFileId        String?
+  pdfGenerated     Boolean  @default(false)
+  
+  // Email tracking
+  sentToEmail      String?
+  sentAt           DateTime?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@index([studentId])
+  @@index([profileScoreId])
+  @@index([createdAt])
+}
+

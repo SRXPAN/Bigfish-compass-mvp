@@ -13,8 +13,8 @@
   },
   "references": [
     { "path": "./packages/shared" },
-    { "path": "./elearn-backend" },
-    { "path": "./Web-e-learning" }
+    { "path": "./bigfish-backend" },
+    { "path": "./bigfish-front" }
   ],
   "files": [],
   "exclude": ["node_modules"]
