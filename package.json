@@ -1,8 +1,8 @@
 {
-  "name": "elearn-monorepo",
-  "version": "1.0.0",
+  "name": "bigfish-compass",
+  "version": "0.1.0",
   "private": true,
-  "description": "E-Learning Platform Monorepo",
+  "description": "Career Guidance Platform for Teens (14-18) - BigFish Compass MVP",
   "workspaces": [
     "packages/*",
     "elearn-backend"
