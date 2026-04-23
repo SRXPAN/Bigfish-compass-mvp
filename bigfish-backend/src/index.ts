@@ -21,9 +21,7 @@ import { prisma } from './db.js'
 // Import Routes
 import authRouter from './routes/auth.js'
 import quizRouter from './routes/quiz.js'
-import editorRouter from './routes/editor.js'
 import topicsRouter from './routes/topics.js'
-import lessonsRouter from './routes/lessons.js'
 import progressRouter from './routes/progress.js'
 import filesRouter from './routes/files.js'
 import adminRouter from './routes/admin.js'
@@ -144,9 +142,7 @@ app.get('/api/auth/csrf', setCsrfToken)
 // --- Routes ---
 app.use('/api/auth', authLimiter, authRouter)
 app.use('/api/topics', topicsRouter)
-app.use('/api/lessons', lessonsRouter)
 app.use('/api/quiz', quizRouter)
-app.use('/api/editor', editorRouter)
 app.use('/api/progress', progressRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/admin', adminRouter)
