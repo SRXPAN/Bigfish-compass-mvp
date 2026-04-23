@@ -21,12 +21,8 @@ import { prisma } from './db.js'
 // Import Routes
 import authRouter from './routes/auth.js'
 import quizRouter from './routes/quiz.js'
-import topicsRouter from './routes/topics.js'
-import progressRouter from './routes/progress.js'
 import filesRouter from './routes/files.js'
-import adminRouter from './routes/admin.js'
 import i18nRouter from './routes/i18n.js'
-import dashboardRouter from './routes/dashboard.js'
 import activityRouter from './routes/activity.js'
 
 // Import Middleware
@@ -141,13 +137,9 @@ app.get('/api/auth/csrf', setCsrfToken)
 
 // --- Routes ---
 app.use('/api/auth', authLimiter, authRouter)
-app.use('/api/topics', topicsRouter)
 app.use('/api/quiz', quizRouter)
-app.use('/api/progress', progressRouter)
 app.use('/api/files', filesRouter)
-app.use('/api/admin', adminRouter)
 app.use('/api/i18n', i18nRouter)
-app.use('/api/dashboard', dashboardRouter)
 app.use('/api/activity', activityRouter)
 
 // --- Error Handling (MUST be last) ---

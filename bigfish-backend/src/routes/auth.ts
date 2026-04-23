@@ -30,7 +30,6 @@ import { logger } from '../utils/logger.js'
 import bcrypt from 'bcryptjs'
 import { ok, created } from '../utils/response.js'
 import { deleteFile } from '../services/storage.service.js'
-import { getBadges } from '../utils/gamification.js'
 
 const router = Router()
 
@@ -79,7 +78,7 @@ router.get('/me', requireAuth, asyncHandler(async (req: Request, res: Response) 
   if (!user) {
     throw AppError.notFound('User not found')
   }
-  return ok(res, { ...user, badges: getBadges(user.xp) })
+  return ok(res, { ...user })
 }))
 
 router.post(
@@ -131,7 +130,6 @@ router.post(
       // TEMPORARY: Return tokens in body for cross-domain auth (until api.e-learn.space is configured)
       return ok(res, { 
         user: result.user, 
-        badges: getBadges(result.user.xp),
         accessToken: result.tokens.accessToken,
         refreshToken: result.tokens.refreshToken
       })
@@ -583,7 +581,7 @@ router.get(
       ...user,
       rank: index + 1,
       level: Math.floor(user.xp / 100) + 1,
-      badges: getBadges(user.xp),
+      badges: [],
     }))
 
     return ok(res, leaderboard)
