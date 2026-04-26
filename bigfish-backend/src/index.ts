@@ -23,7 +23,6 @@ import authRouter from './routes/auth.js'
 import quizRouter from './routes/quiz.js'
 import filesRouter from './routes/files.js'
 import i18nRouter from './routes/i18n.js'
-import activityRouter from './routes/activity.js'
 
 // Import Middleware
 import { generalLimiter, authLimiter } from './middleware/rateLimit.js'
@@ -140,7 +139,6 @@ app.use('/api/auth', authLimiter, authRouter)
 app.use('/api/quiz', quizRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/i18n', i18nRouter)
-app.use('/api/activity', activityRouter)
 
 // --- Error Handling (MUST be last) ---
 app.use(notFoundHandler) // 404 Handler

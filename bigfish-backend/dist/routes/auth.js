@@ -13,7 +13,6 @@ import { logger } from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import { ok, created } from '../utils/response.js';
 import { deleteFile } from '../services/storage.service.js';
-import { getBadges } from '../utils/gamification.js';
 const router = Router();
 // ============================================
 // UTILITY FUNCTIONS
@@ -54,7 +53,7 @@ router.get('/me', requireAuth, asyncHandler(async (req, res) => {
     if (!user) {
         throw AppError.notFound('User not found');
     }
-    return ok(res, { ...user, badges: getBadges(user.xp) });
+    return ok(res, { ...user });
 }));
 router.post('/register', authLimiter, validateResource(authSchemas.register, 'body'), asyncHandler(async (req, res) => {
     const { userAgent, ip } = getClientInfo(req);
@@ -93,7 +92,6 @@ router.post('/login', authLimiter, validateResource(authSchemas.login, 'body'), 
         // TEMPORARY: Return tokens in body for cross-domain auth (until api.e-learn.space is configured)
         return ok(res, {
             user: result.user,
-            badges: getBadges(result.user.xp),
             accessToken: result.tokens.accessToken,
             refreshToken: result.tokens.refreshToken
         });
@@ -156,6 +154,44 @@ router.put('/password', requireAuth, validateResource(authSchemas.changePassword
         }
         throw e;
     }
+}));
+// PUT /api/auth/name — змінити ім'я
+router.put('/name', requireAuth, asyncHandler(async (req, res) => {
+    const { newName } = req.body;
+    if (!newName || typeof newName !== 'string') {
+        throw AppError.badRequest('New name is required');
+    }
+    const trimmedName = newName.trim();
+    if (trimmedName.length < 2) {
+        throw AppError.badRequest('Name must be at least 2 characters');
+    }
+    if (trimmedName.length > 255) {
+        throw AppError.badRequest('Name is too long');
+    }
+    const updatedUser = await prisma.user.update({
+        where: { id: req.user.id },
+        data: { name: trimmedName },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            xp: true,
+            avatarId: true,
+            emailVerified: true,
+            avatarFile: { select: { id: true, key: true, mimeType: true } },
+        },
+    });
+    await auditLog({
+        userId: req.user.id,
+        action: AuditActions.UPDATE,
+        resource: AuditResources.USER,
+        resourceId: req.user.id,
+        metadata: { newName: trimmedName },
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+    });
+    return ok(res, { user: updatedUser, message: 'Name updated successfully' });
 }));
 // PUT /api/auth/email — змінити email
 router.put('/email', requireAuth, asyncHandler(async (req, res) => {
@@ -389,7 +425,7 @@ router.get('/leaderboard', requireAuth, asyncHandler(async (req, res) => {
         ...user,
         rank: index + 1,
         level: Math.floor(user.xp / 100) + 1,
-        badges: getBadges(user.xp),
+        badges: [],
     }));
     return ok(res, leaderboard);
 }));

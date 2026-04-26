@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken'
 import { getJwtSecret } from '../utils/env.js'
 import type { Lang } from '../shared'
 import { logger } from '../utils/logger.js'
-import { updateDailyActivity } from './progress.service.js'
 import type { Quiz, Question, Option, QuizAttempt, Prisma } from '@prisma/client'
 
 // Type definitions for quiz-related data
@@ -250,9 +249,6 @@ export async function submitQuizAttempt(
     }
   })
 
-  // Log quiz attempt in daily activity
-  logger.info(`[submitQuizAttempt] Updating daily activity for user ${userId}`)
-  await updateDailyActivity(userId, { quizAttempts: 1 })
   logger.info(`[submitQuizAttempt] Quiz attempt successfully recorded for user ${userId}, passed: ${passed}`)
 
   return {

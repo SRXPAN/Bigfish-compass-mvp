@@ -40,8 +40,6 @@ export async function registerUser(data, userAgent, ip) {
             emailVerified: true,
         },
     });
-    // Створюємо токен верифікації email
-    await createEmailVerificationToken(email);
     // Створюємо токени
     const tokens = await createTokenPair({ id: user.id, name: user.name, email: user.email, role: user.role }, userAgent, ip);
     await auditLog({

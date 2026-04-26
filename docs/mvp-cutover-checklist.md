@@ -1,48 +1,47 @@
-# BigFish Compass MVP - Cutover Checklist
+# BigFish Compass MVP - Master Checklist & Roadmap
 
-## 1. Repository Setup
+## ✅ Phase 1: Repository Setup & Legacy Cleanup (COMPLETED)
 - [x] Keep old remote as `legacy-origin`
 - [x] Add new remote as `origin` (`Bigfish-compass-mvp`)
-- [ ] Create `main` protection rules in GitHub
-- [ ] Create `develop` and `release/mvp` branches
+- [x] Create migration branch: `feat/bigfish-mvp-core`
+- [x] Safe Legacy Removal: Deleted all pure e-learning modules (lessons, materials, gamification, leaderboard).
+- [x] Generated clean `init_bigfish` Prisma migration.
 
-## 2. Cleanup Preparation (Non-Destructive)
-- [ ] Tag current state: `git tag pre-bigfish-migration`
-- [ ] Create migration branch: `git checkout -b feat/bigfish-mvp-core`
-- [ ] Freeze legacy e-learning endpoints from further feature changes
+---
 
-## 3. Domain Rework
-- [ ] Add Prisma entities for tests, sessions, responses, recommendations, reports, access codes
-- [ ] Add role update/migration to `student | counselor | admin`
-- [ ] Implement access code flows
-- [ ] Implement Stripe billing + entitlement checks
+## 🚀 Phase 2: Core MVP Development (Current Phase)
 
-## 4. AI and Language Quality
-- [ ] Standardize prompt templates by locale
-- [ ] Add language guardrail tests for report generation
-- [ ] Add fallback logic if LLM response locale mismatches target locale
+### Sprint 1: Lovable UI Merge & Auth Integration
+- [ ] **Dependencies:** Merge Lovable's `package.json` (Tailwind, Shadcn, Lucide) into `bigfish-front`.
+- [ ] **Styling:** Transfer `tailwind.config.js` and global CSS variables from Lovable to `bigfish-front`.
+- [ ] **Component Transfer:** Move Lovable UI pages into `bigfish-front/src/client-ui`.
+- [ ] **Routing Updates:** Update `App.tsx` to map public routes (`/`, `/quiz`, `/login`) to Lovable components, while keeping `/admin/*` intact.
+- [ ] **Auth Connect:** Refactor Lovable's Login/Register components to trigger existing `AuthContext.tsx` logic.
 
-## 5. Frontend MVP Surfaces
-- [ ] Student test flow + result page
-- [ ] Counselor dashboard for cohort results
-- [ ] Admin pages for users/codes/content
-- [ ] Basic test builder UI
+### Sprint 2: Database Domain Rework & Quiz Logic
+- [ ] **Schema Update:** Adapt `Quiz`, `Question`, and `QuizAttempt` models for career assessments (e.g., scoring weights, categories).
+- [ ] **Dynamic Data Fetching:** Replace hardcoded Lovable questions with API calls (`GET /api/quiz/:id`).
+- [ ] **Test Builder UI:** Update Admin pages to support creating career questions and assigning category weights.
+- [ ] **Result Calculation:** Create backend endpoint to calculate raw assessment scores (Analytics vs. Creative) upon submission.
 
-## 6. Safe Legacy Removal
-Remove only after replacement is verified:
-- [ ] lessons/materials/topic pages and APIs
-- [ ] pure e-learning gamification screens
-- [ ] unused shared types tied to removed modules
+### Sprint 3: Deep i18n & AI Report Generation
+- [ ] **i18n Architecture:** Verify `Translation` and `TranslationValue` tables logic for multi-language questions.
+- [ ] **AI Context Injection (`ai.service.ts`):** Build prompt combining user test scores + user profile + database of careers.
+- [ ] **JSON Mode Enforcement:** Ensure OpenAI returns strict JSON formatting to prevent frontend rendering errors.
+- [ ] **Report UI:** Connect Lovable `/results/:id` page to securely fetch and render the AI-generated JSON.
+- [ ] **Language Guardrails:** Add fallback logic if LLM response locale mismatches user's requested locale.
 
-## 7. Production Readiness
-- [ ] E2E smoke tests for role-based user flows
-- [ ] Billing test mode validation
-- [ ] Error tracking and audit verification
-- [ ] Deployment checklist and rollback plan
+### Sprint 4: B2B Access Logic & Stripe Monetization
+- [ ] **Role Migration:** Ensure complete separation of `student`, `counselor`, and `admin` roles in frontend `RequireRole.tsx`.
+- [ ] **Access Code Flow:** Create endpoints for generating and redeeming cohort access codes.
+- [ ] **Counselor Dashboard:** Build UI for counselors to view their cohort's AI reports.
+- [ ] **Stripe Billing:** Implement checkout for one-time tests / B2B access.
+- [ ] **Entitlement Checks:** Add middleware to verify payment/access code before allowing test submission.
 
-## Recommended First Commands
-```bash
-git fetch --all
-git checkout -b feat/bigfish-mvp-core
-git tag pre-bigfish-migration
-```
+---
+
+## 🏁 Phase 3: Production Readiness
+- [ ] E2E smoke tests for role-based user flows.
+- [ ] Billing test mode validation.
+- [ ] Error tracking and audit verification.
+- [ ] Deployment (Cloudflare Pages for Frontend, Render for Backend).

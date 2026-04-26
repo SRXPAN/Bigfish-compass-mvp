@@ -36,22 +36,6 @@ export const prisma = basePrisma.$extends({
         },
     },
     query: {
-        material: {
-            async findMany({ args, query }) {
-                if (args.where?.deletedAt === undefined) {
-                    args.where = { ...args.where, deletedAt: null };
-                }
-                return query(args);
-            },
-            async findFirst({ args, query }) {
-                if (args.where?.deletedAt === undefined) {
-                    args.where = { ...args.where, deletedAt: null };
-                }
-                return query(args);
-            },
-            // Note: We don't override findUnique because it requires a unique constraint.
-            // Usually, soft-deleted items stay in findUnique unless you change the ID logic.
-        },
         quiz: {
             async findMany({ args, query }) {
                 if (args.where?.deletedAt === undefined) {

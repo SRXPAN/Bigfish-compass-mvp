@@ -7,8 +7,7 @@ import {
 
 import { useAuth } from '@/auth/AuthContext'
 import { useTranslation } from '@/i18n/useTranslation'
-import { useActivityTracker } from '@/hooks/useActivityTracker'
-import { apiGet, apiPost } from '@/lib/http'
+import { apiGet } from '@/lib/http'
 import { SkeletonDashboard } from '@/components/Skeletons'
 import QuizHistory from '@/components/QuizHistory'
 import { 
@@ -56,7 +55,6 @@ interface DashboardData {
 export default function Dashboard() {
   const { user } = useAuth()
   const { t, lang } = useTranslation()
-  useActivityTracker() // Активуємо пінг активності
 
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -110,43 +108,6 @@ export default function Dashboard() {
     loadDashboard()
     return () => { mounted = false }
   }, [lang, user]) // Перезавантажуємо при зміні мови або user
-
-  // Стан для запобігання швидким подвійним клікам
-  const [togglingGoals, setTogglingGoals] = useState<Set<string>>(new Set())
-  
-  // Функція для відмітки цілі як виконаної (оптимістичний UI з захистом від подвійних кліків)
-  const toggleGoal = async (goalId: string, currentState: boolean) => {
-    if (!data || !user) return
-    
-    // Захист від подвійних кліків
-    if (togglingGoals.has(goalId)) return
-    setTogglingGoals(prev => new Set(prev).add(goalId))
-    
-    // Optimistic update
-    setData(prev => prev ? ({
-      ...prev,
-      dailyGoals: prev.dailyGoals.map(g => g.id === goalId ? { ...g, isCompleted: !currentState } : g)
-    }) : null)
-
-    try {
-      await apiPost(`/progress/goals/${goalId}/toggle`, {})
-    } catch {
-      // Revert if failed - apiPost вже обробляє CSRF автоматично
-      setData(prev => prev ? ({
-        ...prev,
-        dailyGoals: prev.dailyGoals.map(g => g.id === goalId ? { ...g, isCompleted: currentState } : g)
-      }) : null)
-    } finally {
-      // Знімаємо блокування через невелику затримку
-      setTimeout(() => {
-        setTogglingGoals(prev => {
-          const next = new Set(prev)
-          next.delete(goalId)
-          return next
-        })
-      }, 500)
-    }
-  }
 
   if (loading) return <SkeletonDashboard />
   
@@ -336,7 +297,7 @@ export default function Dashboard() {
                       type="checkbox" 
                       className="hidden"
                       checked={g.isCompleted} 
-                      onChange={() => toggleGoal(g.id, g.isCompleted)}
+                      readOnly
                     />
                     <span className={`font-medium transition-colors break-words ${
                       g.isCompleted 

@@ -53,9 +53,32 @@ export function isProd() {
 }
 // Критичні змінні - завантажуються при старті
 let _jwtSecret = null;
+let _geminiApiKey = null;
 export function getJwtSecret() {
     if (_jwtSecret)
         return _jwtSecret;
     _jwtSecret = requireEnv('JWT_SECRET', 'Secret key for JWT token signing (use a long random string)');
     return _jwtSecret;
+}
+/**
+ * Get Gemini API key for AI-powered features (quiz generation, etc.)
+ * Returns null if not configured (feature will be disabled)
+ */
+export function getGeminiApiKey() {
+    if (_geminiApiKey !== null)
+        return _geminiApiKey;
+    const value = process.env.GEMINI_API_KEY;
+    if (!value) {
+        logger.warn('⚠️  GEMINI_API_KEY not configured. AI-powered features will be disabled.');
+        _geminiApiKey = '';
+        return null;
+    }
+    _geminiApiKey = value;
+    return _geminiApiKey;
+}
+/**
+ * Check if Gemini API is configured
+ */
+export function isGeminiConfigured() {
+    return !!getGeminiApiKey();
 }
