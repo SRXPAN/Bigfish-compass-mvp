@@ -9,11 +9,10 @@ import { useAuth } from '@/auth/AuthContext'
 import { useTranslation } from '@/i18n/useTranslation'
 import { apiGet } from '@/lib/http'
 import { SkeletonDashboard } from '@/components/Skeletons'
-import QuizHistory from '@/components/QuizHistory'
-import { 
-  ProgressBar, 
-  StatCard, 
-  StreakDay 
+import {
+  ProgressBar,
+  StatCard,
+  StreakDay
 } from '@/components/dashboard/DashboardComponents'
 
 // Типи даних, які очікуємо від бекенду
@@ -432,9 +431,6 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-
-          {/* 7. Recent History */}
-          <QuizHistory />
 
         </div>
       </div>
