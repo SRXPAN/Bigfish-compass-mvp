@@ -86,7 +86,6 @@ export async function getQuizWithToken(quizId: string, userId: string, lang?: La
     id: quiz.id,
     title: shouldLocalize ? getLocalized(quiz.titleJson, lang, quiz.title) : quiz.title,
     durationSec: quiz.durationSec,
-    topicId: quiz.topicId,
     status: quiz.status,
     token: quizToken,
     questions: quiz.questions.map((q) => ({

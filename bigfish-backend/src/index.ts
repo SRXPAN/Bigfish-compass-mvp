@@ -186,3 +186,4 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection', new Error(String(reason)), { promise })
 })
+
