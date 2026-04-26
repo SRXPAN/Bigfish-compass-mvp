@@ -41,6 +41,8 @@ export interface AuthResult {
     email: string
     role: Role
     xp: number
+    tokens: number
+    seatsAvailable: number
     emailVerified: boolean
   }
   tokens: TokenPair
@@ -82,6 +84,8 @@ export async function registerUser(
       email: true, 
       role: true, 
       xp: true,
+      tokens: true,
+      seatsAvailable: true,
       emailVerified: true,
     },
   })
@@ -124,6 +128,8 @@ export async function loginUser(
       email: true,
       role: true,
       xp: true,
+      tokens: true,
+      seatsAvailable: true,
       password: true,
       emailVerified: true,
     },
@@ -162,6 +168,8 @@ export async function loginUser(
       email: user.email, 
       role: user.role as Role, 
       xp: user.xp,
+      tokens: user.tokens,
+      seatsAvailable: user.seatsAvailable,
       emailVerified: user.emailVerified,
     }, 
     tokens 

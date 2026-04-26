@@ -244,12 +244,3 @@ See [docs/mvp-cutover-checklist.md](docs/mvp-cutover-checklist.md) for full deta
 - **Migration Map**: [docs/mvp-feature-map.md](docs/mvp-feature-map.md)
 
 ---
-
-## 📞 Contact & Support
-
-For questions or contributions, reach out to **@izaretskaya** or open an issue on this repository.
-
----
-
-**Built with ❤️ for the future of career guidance.**
-

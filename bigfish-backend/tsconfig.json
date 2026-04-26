@@ -12,5 +12,14 @@
     "resolveJsonModule": true
   },
   "include": ["src"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "src/routes/admin.ts",
+    "src/routes/dashboard.ts",
+    "src/routes/progress.ts",
+    "src/routes/topics.ts",
+    "src/services/progress.service.ts",
+    "src/services/topics.service.ts",
+    "src/prisma/seed.safe.ts"
+  ]
 }

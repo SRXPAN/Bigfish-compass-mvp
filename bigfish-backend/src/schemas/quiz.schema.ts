@@ -106,6 +106,18 @@ export const quizIdParamSchema = z.object({
   id: z.string().cuid('Invalid quiz ID'),
 })
 
+export const quizStartParamSchema = z.object({
+  quizId: z.string().cuid('Invalid quiz ID'),
+})
+
+export const attemptIdParamSchema = z.object({
+  attemptId: z.string().cuid('Invalid attempt ID'),
+})
+
+export const submitAttemptOptionIdsSchema = z
+  .array(z.string().cuid('Invalid option ID'))
+  .min(1, 'At least one selected option is required')
+
 export type QuizIdParam = z.infer<typeof quizIdParamSchema>
 
 /**
@@ -131,5 +143,8 @@ export const quizSchemas = {
   updateQuiz: updateQuizSchema,
   submitQuiz: submitQuizSchema,
   idParam: quizIdParamSchema,
+  quizStartParam: quizStartParamSchema,
+  attemptIdParam: attemptIdParamSchema,
+  submitAttemptOptionIds: submitAttemptOptionIdsSchema,
   pagination: quizPaginationSchema,
 }

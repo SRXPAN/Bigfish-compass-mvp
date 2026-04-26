@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Trophy, User, LogOut, LucideIcon, Menu, X, Shield } from 'lucide-react'
+import { LayoutDashboard, User, LogOut, LucideIcon, Menu, X, Shield } from 'lucide-react'
 
 // Components
 import RequireAuth from './components/RequireAuth'
@@ -12,13 +12,10 @@ import Toasts from '@/components/Toast'
 
 // Core Pages (All imported eagerly to prevent Suspense/lazy issues)
 import Dashboard from './pages/Dashboard'
-import Materials from './pages/Materials'
-import Leaderboard from './pages/Leaderboard'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import NotFound from './pages/NotFound'
-import LessonView from './pages/LessonView'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminUsers from './pages/admin/AdminUsers'
@@ -154,8 +151,6 @@ export default function App() {
             {/* Desktop Nav */}
             <nav className="hidden md:flex items-center gap-1">
               <NavItem to="/" icon={LayoutDashboard} label={t('nav.dashboard')} />
-              <NavItem to="/materials" icon={BookOpen} label={t('nav.materials')} />
-              <NavItem to="/leaderboard" icon={Trophy} label={t('nav.leaderboard')} />
               <NavItem to="/profile" icon={User} label={t('nav.profile')} />
               {user?.role && (user.role === 'ADMIN' || user.role === 'EDITOR') && (
                 <NavItem to="/admin" icon={Shield} label={t('nav.admin')} />
@@ -208,8 +203,6 @@ export default function App() {
           <div className="md:hidden border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 absolute w-full shadow-xl">
             <nav className="flex flex-col p-4 gap-2">
               <NavItem to="/" icon={LayoutDashboard} label={t('nav.dashboard')} onClick={closeMobileMenu} />
-              <NavItem to="/materials" icon={BookOpen} label={t('nav.materials')} onClick={closeMobileMenu} />
-              <NavItem to="/leaderboard" icon={Trophy} label={t('nav.leaderboard')} onClick={closeMobileMenu} />
               <NavItem to="/profile" icon={User} label={t('nav.profile')} onClick={closeMobileMenu} />
               {user?.role && (user.role === 'ADMIN' || user.role === 'EDITOR') && (
                 <NavItem to="/admin" icon={Shield} label={t('nav.admin')} onClick={closeMobileMenu} />
@@ -236,9 +229,6 @@ export default function App() {
           <Routes>
             <Route path="/" element={<RequireAuth><Dashboard/></RequireAuth>} />
             <Route path="/dashboard" element={<RequireAuth><Dashboard/></RequireAuth>} />
-            <Route path="/materials" element={<RequireAuth><Materials/></RequireAuth>} />
-            <Route path="/lesson/:topicId/:lessonId" element={<RequireAuth><LessonView/></RequireAuth>} />
-            <Route path="/leaderboard" element={<RequireAuth><Leaderboard/></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><Profile/></RequireAuth>} />
             <Route path="*" element={<NotFound/>} />
           </Routes>
