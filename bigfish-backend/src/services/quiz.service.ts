@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { getJwtSecret } from '../utils/env.js'
 import type { Lang } from '../shared'
 import { logger } from '../utils/logger.js'
+import { AppError } from '../utils/AppError.js'
 import type { Quiz, Question, Option, QuizAttempt, Prisma } from '@prisma/client'
 
 // Type definitions for quiz-related data
@@ -28,6 +29,19 @@ interface QuizSubmitResult {
   xpEarned: number
   correctMap: Record<string, string>
   solutions: Record<string, string>
+}
+
+interface StartQuizAttemptResult {
+  id: string
+  userId: string
+  quizId: string
+  status: 'IN_PROGRESS' | 'COMPLETED'
+  createdAt: Date
+}
+
+interface SubmitCareerAttemptResult {
+  attemptId: string
+  rawScores: Record<string, number>
 }
 
 /**
@@ -315,5 +329,157 @@ export async function getUserQuizHistory(
       total,
       totalPages: Math.ceil(total / options.limit)
     }
+  }
+}
+
+/**
+ * Start quiz attempt with token deduction
+ */
+export async function startQuizAttempt(
+  quizId: string,
+  userId: string
+): Promise<StartQuizAttemptResult> {
+  const [user, quiz] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, tokens: true },
+    }),
+    prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: { id: true },
+    }),
+  ])
+
+  if (!user) {
+    throw AppError.notFound('User not found')
+  }
+
+  if (!quiz) {
+    throw AppError.notFound('Quiz not found')
+  }
+
+  if (!user.tokens || user.tokens <= 0) {
+    throw AppError.forbidden('Not enough tokens. Please purchase access.')
+  }
+
+  const attempt = await prisma.$transaction(async (tx) => {
+    const deducted = await tx.user.updateMany({
+      where: {
+        id: userId,
+        tokens: { gt: 0 },
+      },
+      data: {
+        tokens: { decrement: 1 },
+      },
+    })
+
+    if (deducted.count === 0) {
+      throw AppError.forbidden('Not enough tokens. Please purchase access.')
+    }
+
+    return tx.quizAttempt.create({
+      data: {
+        userId,
+        quizId,
+        score: 0,
+        total: 0,
+        xpEarned: 0,
+        status: 'IN_PROGRESS' as any,
+      },
+      select: {
+        id: true,
+        userId: true,
+        quizId: true,
+        status: true,
+        createdAt: true,
+      },
+    })
+  })
+
+  return {
+    id: attempt.id,
+    userId: attempt.userId,
+    quizId: attempt.quizId,
+    status: attempt.status as 'IN_PROGRESS' | 'COMPLETED',
+    createdAt: attempt.createdAt,
+  }
+}
+
+/**
+ * Submit career assessment attempt and persist grouped raw scores by category
+ */
+export async function submitCareerAssessmentAttempt(
+  attemptId: string,
+  userId: string,
+  selectedOptionIds: string[]
+): Promise<SubmitCareerAttemptResult> {
+  const attempt = await prisma.quizAttempt.findFirst({
+    where: {
+      id: attemptId,
+      userId,
+    },
+    select: {
+      id: true,
+      quizId: true,
+      status: true,
+    },
+  })
+
+  if (!attempt) {
+    throw AppError.notFound('Quiz attempt not found')
+  }
+
+  if (attempt.status === 'COMPLETED') {
+    throw AppError.badRequest('Quiz attempt already completed')
+  }
+
+  const uniqueOptionIds = Array.from(new Set(selectedOptionIds))
+
+  const options = await prisma.option.findMany({
+    where: {
+      id: { in: uniqueOptionIds },
+    },
+    select: {
+      id: true,
+      weight: true,
+      category: true,
+      question: {
+        select: {
+          quizId: true,
+        },
+      },
+    },
+  })
+
+  if (options.length !== uniqueOptionIds.length) {
+    throw AppError.badRequest('Some selected options are invalid')
+  }
+
+  const invalidQuizOption = options.find((option) => option.question.quizId !== attempt.quizId)
+  if (invalidQuizOption) {
+    throw AppError.badRequest('Selected options do not belong to this quiz attempt')
+  }
+
+  const rawScores = options.reduce<Record<string, number>>((acc, option) => {
+    const key = option.category ?? 'Uncategorized'
+    acc[key] = (acc[key] ?? 0) + option.weight
+    return acc
+  }, {})
+
+  const totalWeightedScore = Object.values(rawScores).reduce((sum, value) => sum + value, 0)
+
+  await prisma.quizAttempt.update({
+    where: { id: attempt.id },
+    data: {
+      status: 'COMPLETED' as any,
+      rawScores,
+      score: totalWeightedScore,
+      total: uniqueOptionIds.length,
+    },
+  })
+
+  return {
+    attemptId: attempt.id,
+    rawScores,
   }
 }

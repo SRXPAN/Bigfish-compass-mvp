@@ -5,7 +5,13 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js'
 import { validateResource } from '../middleware/validateResource.js'
 import { quizSchemas } from '../schemas/quiz.schema.js'
 import type { Lang } from '../shared'
-import { getQuizWithToken, submitQuizAttempt, getUserQuizHistory } from '../services/quiz.service.js'
+import {
+  getQuizWithToken,
+  submitQuizAttempt,
+  getUserQuizHistory,
+  startQuizAttempt,
+  submitCareerAssessmentAttempt,
+} from '../services/quiz.service.js'
 import { z } from 'zod'
 
 const router = Router()
@@ -31,6 +37,32 @@ router.get(
     }
     
     return res.json(quiz)
+  })
+)
+
+// POST /api/quiz/:quizId/start
+router.post(
+  '/:quizId/start',
+  requireAuth,
+  validateResource(quizSchemas.quizStartParam, 'params'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const quizId = getParam(req.params.quizId)
+    const attempt = await startQuizAttempt(quizId, req.user!.id)
+    return res.status(201).json(attempt)
+  })
+)
+
+// POST /api/quiz/attempt/:attemptId/submit
+router.post(
+  '/attempt/:attemptId/submit',
+  requireAuth,
+  validateResource(quizSchemas.attemptIdParam, 'params'),
+  validateResource(quizSchemas.submitAttemptOptionIds, 'body'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const attemptId = getParam(req.params.attemptId)
+    const selectedOptionIds = req.body as string[]
+    const result = await submitCareerAssessmentAttempt(attemptId, req.user!.id, selectedOptionIds)
+    return res.json(result)
   })
 )
 

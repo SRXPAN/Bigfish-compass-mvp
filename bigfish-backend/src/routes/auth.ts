@@ -99,6 +99,8 @@ router.post(
           email: result.user.email,
           role: result.user.role,
           xp: result.user.xp,
+          tokens: result.user.tokens,
+          seatsAvailable: result.user.seatsAvailable,
           emailVerified: result.user.emailVerified
         },
         message: 'Registration successful. Please verify your email.',

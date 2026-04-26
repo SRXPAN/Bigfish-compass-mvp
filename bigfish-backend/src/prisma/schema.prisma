@@ -16,17 +16,17 @@ model User {
   avatarFile     File?          @relation("UserAvatar", fields: [avatarId], references: [id])
   role           Role           @default(STUDENT)
   xp             Int            @default(0)
+  tokens         Int            @default(0)
+  seatsAvailable Int            @default(0)
   emailVerified  Boolean        @default(false)
   isPremium      Boolean        @default(true) // All users are premium (free version)
   deletedAt      DateTime? // For soft delete - freed email when deleted
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @default(now()) @updatedAt
-  answers        Answer[]
-  quizzesCreated Quiz[]         @relation("QuizCreator")
-  quizAttempts   QuizAttempt[]
   refreshTokens  RefreshToken[]
   filesUploaded  File[]         @relation("FileUploader")
   auditLogs      AuditLog[]
+  accessCodes    AccessCode[]   @relation("CounselorAccessCodes")
 
   // BigFish Compass relationships
   adminOfSchool     School? @relation("SchoolAdmin")
@@ -50,19 +50,6 @@ enum Role {
   ADMIN
 }
 
-enum Category {
-  Programming
-  Mathematics
-  Databases
-  Networks
-  WebDevelopment
-  MobileDevelopment
-  MachineLearning
-  Security
-  DevOps
-  OperatingSystems
-}
-
 enum Status {
   Draft
   Published
@@ -72,94 +59,6 @@ enum Lang {
   UA
   PL
   EN
-}
-
-model Quiz {
-  id          String        @id @default(cuid())
-  title       String // Fallback title (EN)
-  titleJson   Json? // {"UA": "...", "PL": "...", "EN": "..."}
-  titleCache  Json? // {"UA": "...", "EN": "..."}
-  durationSec Int           @default(60)
-  questions   Question[]
-  attempts    QuizAttempt[]
-  status      Status        @default(Draft)
-  publishedAt DateTime?
-  createdById String?
-  createdBy   User?         @relation("QuizCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @default(now()) @updatedAt
-  deletedAt   DateTime?
-}
-
-model Question {
-  id              String     @id @default(cuid())
-  text            String // Fallback text (EN)
-  textJson        Json? // {"UA": "...", "PL": "...", "EN": "..."}
-  explanation     String?
-  explanationJson Json? // {"UA": "...", "PL": "...", "EN": "..."}
-  tags            String[]
-  difficulty      Difficulty
-  quizId          String
-  quiz            Quiz       @relation(fields: [quizId], references: [id])
-  options         Option[]
-  answers         Answer[]
-
-  @@index([quizId])
-}
-
-model Option {
-  id         String   @id @default(cuid())
-  text       String // Fallback text (EN)
-  textJson   Json? // {"UA": "...", "PL": "...", "EN": "..."}
-  correct    Boolean  @default(false)
-  questionId String
-  question   Question @relation(fields: [questionId], references: [id])
-  answers    Answer[]
-
-  @@index([questionId])
-}
-
-model Answer {
-  id         String       @id @default(cuid())
-  userId     String
-  user       User         @relation(fields: [userId], references: [id])
-  questionId String
-  question   Question     @relation(fields: [questionId], references: [id])
-  optionId   String?
-  option     Option?      @relation(fields: [optionId], references: [id])
-  isCorrect  Boolean
-  createdAt  DateTime     @default(now())
-  attemptId  String?
-  attempt    QuizAttempt? @relation(fields: [attemptId], references: [id])
-
-  @@index([userId])
-  @@index([questionId])
-  @@index([userId, questionId]) // Композитний індекс для швидкого пошуку відповідей користувача
-  @@index([createdAt]) // Індекс для сортування за датою
-  @@index([attemptId])
-}
-
-model QuizAttempt {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  quizId    String
-  quiz      Quiz     @relation(fields: [quizId], references: [id])
-  score     Int // correct answers count
-  total     Int // total questions
-  xpEarned  Int      @default(0)
-  createdAt DateTime @default(now())
-  answers   Answer[]
-
-  @@index([userId])
-  @@index([quizId])
-  @@index([userId, createdAt])
-}
-
-enum Difficulty {
-  Easy
-  Medium
-  Hard
 }
 
 model Payment {
@@ -229,27 +128,6 @@ model EmailVerificationToken {
 }
 
 // ============================================
-// ACTIVITY & PROGRESS MODELS
-// ============================================
-
-// Активність користувача (для аналітики)
-model UserActivity {
-  id              String   @id @default(cuid())
-  userId          String
-  date            DateTime @db.Date // Тільки дата без часу
-  timeSpent       Int      @default(0) // Час в секундах
-  quizAttempts    Int      @default(0)
-  materialsViewed Int      @default(0)
-  goalsCompleted  Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now()) @updatedAt
-
-  @@unique([userId, date])
-  @@index([userId])
-  @@index([date])
-}
-
-// ============================================
 // TRANSLATION MODELS
 // ============================================
 
@@ -281,36 +159,6 @@ model UiTranslation {
 // The normalized I18nKey/I18nValue tables have been removed.
 // Localization now uses JSON cache fields directly in the remaining content models.
 // - titleCache: {"UA": "...", "EN": "...", "PL": "..."}
-
-// Слабкі місця / рекомендації
-model WeakSpotTemplate {
-  id           String   @id @default(cuid())
-  category     String // algorithms, sql, oop, etc.
-  weight       Int      @default(1)
-  translations Json // {topic: {UA,PL,EN}, advice: {UA,PL,EN}}
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
-}
-
-// Досягнення
-model AchievementTemplate {
-  id           String   @id @default(cuid())
-  code         String   @unique // "first_quiz", "week_streak", etc.
-  icon         String // emoji or icon name
-  translations Json // {name: {UA,PL,EN}, description: {UA,PL,EN}}
-  xpReward     Int      @default(0)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
-}
-
-// Категорії з перекладами
-model CategoryTranslation {
-  id           String   @id @default(cuid())
-  category     Category @unique
-  translations Json // {"UA": "Програмування", "PL": "...", "EN": "..."}
-}
 
 // ============================================
 // FILE STORAGE MODELS
@@ -380,7 +228,6 @@ model School {
   admin        User          @relation("SchoolAdmin", fields: [adminId], references: [id], onDelete: Cascade)
   counselors   User[]        @relation("SchoolCounselor")
   students     User[]        @relation("SchoolStudent")
-  accessCodes  AccessCode[]
   subscription Subscription?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @default(now()) @updatedAt
@@ -389,24 +236,20 @@ model School {
   @@index([country])
 }
 
-// Кодекси доступу для шкіл (наприклад: SCHOOL2025)
+// B2B коди доступу для студентів, які генерує counselor
 model AccessCode {
-  id       String @id @default(cuid())
-  code     String @unique @db.VarChar(10) // Верхній регістр: "CODE123"
-  schoolId String
-  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-
-  maxActivations Int       @default(999) // -1 = unlimited
-  activations    Int       @default(0)
-  expiresAt      DateTime?
-  isActive       Boolean   @default(true)
+  id          String @id @default(cuid())
+  code        String @unique
+  maxUses     Int
+  currentUses Int    @default(0)
+  counselorId String
+  counselor   User   @relation("CounselorAccessCodes", fields: [counselorId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([code])
-  @@index([schoolId])
-  @@index([expiresAt])
+  @@index([counselorId])
 }
 
 // Підписка/Біллінг (Stripe)

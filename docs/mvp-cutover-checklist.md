@@ -1,42 +1,47 @@
-# BigFish Compass MVP - Master Checklist & Roadmap
+# BigFish Compass MVP - Master Technical Roadmap
 
-## ✅ Phase 1: Repository Setup & Legacy Cleanup (COMPLETED)
-- [x] Keep old remote as `legacy-origin`
-- [x] Add new remote as `origin` (`Bigfish-compass-mvp`)
-- [x] Create migration branch: `feat/bigfish-mvp-core`
-- [x] Safe Legacy Removal: Deleted all pure e-learning modules (lessons, materials, gamification, leaderboard).
-- [x] Generated clean `init_bigfish` Prisma migration.
+## ✅ Phase 1: Legacy E-Learning Cleanup (COMPLETED)
+- [x] Repository initialized and stripped of old LMS fat.
+- [x] Database schema cleaned (kept User, Auth, Quiz core).
+- [x] Unused frontend components and backend routes removed.
 
 ---
 
-## 🚀 Phase 2: Core MVP Development (Current Phase)
+## 🚀 Phase 2: Core MVP Development (CURRENT)
 
-### Sprint 1: Lovable UI Merge & Auth Integration
-- [ ] **Dependencies:** Merge Lovable's `package.json` (Tailwind, Shadcn, Lucide) into `bigfish-front`.
-- [ ] **Styling:** Transfer `tailwind.config.js` and global CSS variables from Lovable to `bigfish-front`.
-- [ ] **Component Transfer:** Move Lovable UI pages into `bigfish-front/src/client-ui`.
-- [ ] **Routing Updates:** Update `App.tsx` to map public routes (`/`, `/quiz`, `/login`) to Lovable components, while keeping `/admin/*` intact.
-- [ ] **Auth Connect:** Refactor Lovable's Login/Register components to trigger existing `AuthContext.tsx` logic.
+### 🎨 Sprint 1: Lovable UI Merge & Core Routing
+**Goal:** Integrate the new design system and connect existing Auth without breaking the backend.
+- [ ] **Dependencies:** Merge `package.json` (Tailwind, Shadcn, Lucide) from Lovable.
+- [ ] **Styling:** Transfer `tailwind.config.js` and global CSS variables (`index.css`).
+- [ ] **Component Transfer:** Move UI pages into `src/client-ui`.
+- [ ] **Auth Connect:** Refactor Lovable's Login/Register components to trigger existing `AuthContext.tsx`.
+- [ ] **Protected Routing:** Set up public routes (`/login`, `/`) and protected shells (`/dashboard`, `/counselor/*`, `/admin/*`).
 
-### Sprint 2: Database Domain Rework & Quiz Logic
-- [ ] **Schema Update:** Adapt `Quiz`, `Question`, and `QuizAttempt` models for career assessments (e.g., scoring weights, categories).
-- [ ] **Dynamic Data Fetching:** Replace hardcoded Lovable questions with API calls (`GET /api/quiz/:id`).
-- [ ] **Test Builder UI:** Update Admin pages to support creating career questions and assigning category weights.
-- [ ] **Result Calculation:** Create backend endpoint to calculate raw assessment scores (Analytics vs. Creative) upon submission.
+### 🗄️ Sprint 2: Database Rework & Student Flow (Tokens)
+**Goal:** Implement the "1 Token = 1 Test" logic and the Student Quiz experience.
+- [ ] **Schema Updates:** Add `tokens` (Int) to `User`. Update `Quiz` for Career assessments (Weights, Archetypes).
+- [ ] **Student Dashboard:** Build `/dashboard` where a user sees available tests.
+- [ ] **Quiz Flow:** Fetch questions dynamically (`GET /api/quiz/:id`).
+- [ ] **Token Consumption:** Deduct 1 Token when a student starts a test.
+- [ ] **Submission Logic:** Endpoint to calculate raw category scores upon test completion.
 
-### Sprint 3: Deep i18n & AI Report Generation
-- [ ] **i18n Architecture:** Verify `Translation` and `TranslationValue` tables logic for multi-language questions.
-- [ ] **AI Context Injection (`ai.service.ts`):** Build prompt combining user test scores + user profile + database of careers.
-- [ ] **JSON Mode Enforcement:** Ensure OpenAI returns strict JSON formatting to prevent frontend rendering errors.
-- [ ] **Report UI:** Connect Lovable `/results/:id` page to securely fetch and render the AI-generated JSON.
-- [ ] **Language Guardrails:** Add fallback logic if LLM response locale mismatches user's requested locale.
+### 🧠 Sprint 3: Deep AI Integration & i18n
+**Goal:** Connect OpenAI for report generation and build the translation engine.
+- [ ] **Context Assembly:** Build strict prompt combining user raw scores + available Careers DB.
+- [ ] **JSON Enforcement:** Ensure OpenAI returns strict JSON for the Results Dashboard.
+- [ ] **Results UI:** Map the AI JSON to the Lovable Results page (with loading states).
+- [ ] **Admin AI Translator:** Utility to auto-translate questions/careers into 7 languages.
+- [ ] **Human Override:** Admin UI to manually edit AI-translated text.
 
-### Sprint 4: B2B Access Logic & Stripe Monetization
-- [ ] **Role Migration:** Ensure complete separation of `student`, `counselor`, and `admin` roles in frontend `RequireRole.tsx`.
-- [ ] **Access Code Flow:** Create endpoints for generating and redeeming cohort access codes.
-- [ ] **Counselor Dashboard:** Build UI for counselors to view their cohort's AI reports.
-- [ ] **Stripe Billing:** Implement checkout for one-time tests / B2B access.
-- [ ] **Entitlement Checks:** Add middleware to verify payment/access code before allowing test submission.
+### 💳 Sprint 4: Commerce, B2B Access & Admin Superpowers
+**Goal:** Make the platform sellable to schools and manageable for support.
+- [ ] **Counselor Schema:** Add `seatsAvailable` (Int) to Counselor profile. Create `AccessCode` model (`code`, `maxUses`, `currentUses`).
+- [ ] **Stripe B2C:** Checkout session to buy 1 Token for $10.
+- [ ] **Stripe B2B (Counselor):** Checkout session to buy Packages (e.g., 30 seats for $200).
+- [ ] **Cohort Management:** Counselor UI to generate codes from available seats and view student reports.
+- [ ] **Paywall UI:** Block test access if `tokens === 0`, showing "Pay with Stripe" or "Enter Access Code".
+- [ ] **Admin Impersonation:** Build "Log in as user" feature for tech support.
+- [ ] **Admin Billing:** Dashboard to manually grant Tokens or Seats.
 
 ---
 

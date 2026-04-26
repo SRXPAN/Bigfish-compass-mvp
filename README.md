@@ -244,9 +244,3 @@ See [docs/mvp-cutover-checklist.md](docs/mvp-cutover-checklist.md) for full deta
 - **Migration Map**: [docs/mvp-feature-map.md](docs/mvp-feature-map.md)
 
 ---
-
-
----
-
-**Built with ❤️ for the future of career guidance.**
-
