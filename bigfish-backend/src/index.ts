@@ -20,9 +20,11 @@ import { prisma } from './db.js'
 
 // Import Routes
 import authRouter from './routes/auth.js'
-import quizRouter from './routes/quiz.js'
+import counselorRouter from './routes/counselor.js'
+import assessmentRouter from './routes/assessment.js'
 import filesRouter from './routes/files.js'
 import i18nRouter from './routes/i18n.js'
+import studentRouter from './routes/student.js'
 
 // Import Middleware
 import { generalLimiter, authLimiter } from './middleware/rateLimit.js'
@@ -136,9 +138,11 @@ app.get('/api/auth/csrf', setCsrfToken)
 
 // --- Routes ---
 app.use('/api/auth', authLimiter, authRouter)
-app.use('/api/quiz', quizRouter)
+app.use('/api/counselor', counselorRouter)
+app.use('/api/assessment', assessmentRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/i18n', i18nRouter)
+app.use('/api/student', studentRouter)
 
 // --- Error Handling (MUST be last) ---
 app.use(notFoundHandler) // 404 Handler

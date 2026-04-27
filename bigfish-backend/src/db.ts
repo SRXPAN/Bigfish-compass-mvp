@@ -42,22 +42,6 @@ export const prisma = basePrisma.$extends({
       }
     },
   },
-  query: {
-    quiz: {
-      async findMany({ args, query }: { args: any; query: (args: any) => Promise<any> }) {
-        if (args.where?.deletedAt === undefined) {
-          args.where = { ...args.where, deletedAt: null }
-        }
-        return query(args)
-      },
-      async findFirst({ args, query }: { args: any; query: (args: any) => Promise<any> }) {
-        if (args.where?.deletedAt === undefined) {
-          args.where = { ...args.where, deletedAt: null }
-        }
-        return query(args)
-      },
-    },
-  },
 })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma

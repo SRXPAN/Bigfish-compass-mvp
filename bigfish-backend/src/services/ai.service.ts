@@ -5,7 +5,6 @@ import { YoutubeTranscript } from 'youtube-transcript'
 import { getGeminiApiKey, isGeminiConfigured } from '../utils/env.js'
 import { AppError } from '../utils/AppError.js'
 import { logger } from '../utils/logger.js'
-import type { Difficulty } from '@prisma/client'
 
 // ============================================
 // TYPES
@@ -22,7 +21,7 @@ export interface GeneratedOption {
 export interface GeneratedQuestion {
   text: string
   explanation: string
-  difficulty: Difficulty
+  difficulty: string // Easy, Medium, Hard
   options: GeneratedOption[]
 }
 
@@ -397,13 +396,13 @@ ${truncatedContent}`
       }
 
       // Map difficulty
-      const difficultyMap: Record<string, Difficulty> = {
+      const difficultyMap: Record<string, string> = {
         easy: 'Easy',
         medium: 'Medium',
         hard: 'Hard',
       }
       const rawDifficulty = (q.difficulty || 'medium').toLowerCase()
-      const difficulty: Difficulty = difficultyMap[rawDifficulty] || 'Medium'
+      const difficulty: string = difficultyMap[rawDifficulty] || 'Medium'
 
       return {
         text: q.text.trim(),

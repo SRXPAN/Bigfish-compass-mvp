@@ -420,12 +420,6 @@ export async function deleteUser(userId: string): Promise<boolean> {
     // Видаляємо токени авторизації
     await tx.refreshToken.deleteMany({ where: { userId } })
     
-    // Видаляємо відповіді на квізи
-    await tx.answer.deleteMany({ where: { userId } })
-    
-    // Видаляємо спроби проходження квізів
-    await tx.quizAttempt.deleteMany({ where: { userId } })
-    
     // Видаляємо токени верифікації email
     await tx.emailVerificationToken.deleteMany({ where: { email: user.email } })
     
