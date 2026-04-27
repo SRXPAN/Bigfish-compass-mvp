@@ -11,7 +11,9 @@ export const AuditActions = {
 export const AuditResources = {
   USER: 'USER',
   FILE: 'FILE',
-  TOPIC: 'TOPIC',
+  ASSESSMENT: 'ASSESSMENT',
+  ACCESS_CODE: 'ACCESS_CODE',
+  SCHOOL: 'SCHOOL',
 } as const
 
 export type AuditAction = typeof AuditActions[keyof typeof AuditActions]

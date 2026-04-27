@@ -1,47 +1,66 @@
 import { config } from 'dotenv'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { dirname } from 'path'
 import { PrismaClient } from '@prisma/client'
 
-// Load .env
+// Завантаження змінних оточення
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 config({ path: resolve(__dirname, '../../.env') })
 
-// Base client
+// Створюємо та ОДРАЗУ розширюємо клієнт
 const prismaClientSingleton = () => {
-  return new PrismaClient({
+  const client = new PrismaClient({
     log: process.env.NODE_ENV === 'production' ? [] : ['error', 'warn'],
+  })
+
+  return client.$extends({
+    model: {
+      user: {
+        async softDelete(id: string) {
+          return client.user.update({
+            where: { id },
+            data: { deletedAt: new Date() },
+          })
+        },
+        async restore(id: string) {
+          return client.user.update({
+            where: { id },
+            data: { deletedAt: null },
+          })
+        },
+      },
+    },
+    query: {
+      user: {
+        async findMany({ args, query }) {
+          if (args.where?.deletedAt === undefined) {
+            args.where = { ...args.where, deletedAt: null }
+          }
+          return query(args)
+        },
+        async findFirst({ args, query }) {
+          if (args.where?.deletedAt === undefined) {
+            args.where = { ...args.where, deletedAt: null }
+          }
+          return query(args)
+        },
+      },
+    },
   })
 }
 
+// Витягуємо точний тип розширеного клієнта за допомогою ReturnType
+type ExtendedPrismaClient = ReturnType<typeof prismaClientSingleton>
+
 const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof prismaClientSingleton>
+  prisma: ExtendedPrismaClient | undefined
 }
 
-const basePrisma = globalForPrisma.prisma ?? prismaClientSingleton()
+// Експортуємо готовий, безпечний екземпляр
+export const prisma = globalForPrisma.prisma ?? prismaClientSingleton()
 
-// EXTENDED CLIENT (Better Soft Delete)
-export const prisma = basePrisma.$extends({
-  model: {
-    $allModels: {
-      // Helper method to soft delete
-      async softDelete(id: string) {
-        return (this as any).update({
-          where: { id },
-          data: { deletedAt: new Date() },
-        })
-      },
-      // Helper to restore
-      async restore(id: string) {
-        return (this as any).update({
-          where: { id },
-          data: { deletedAt: null },
-        })
-      }
-    },
-  },
-})
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma
+// Зберігаємо його для гарячого перезавантаження в режимі розробки
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}

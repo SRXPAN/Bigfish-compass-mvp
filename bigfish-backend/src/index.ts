@@ -20,6 +20,7 @@ import { prisma } from './db.js'
 
 // Import Routes
 import authRouter from './routes/auth.js'
+import adminRouter from './routes/admin.js'
 import counselorRouter from './routes/counselor.js'
 import assessmentRouter from './routes/assessment.js'
 import filesRouter from './routes/files.js'
@@ -138,6 +139,7 @@ app.get('/api/auth/csrf', setCsrfToken)
 
 // --- Routes ---
 app.use('/api/auth', authLimiter, authRouter)
+app.use('/api/admin', adminRouter)
 app.use('/api/counselor', counselorRouter)
 app.use('/api/assessment', assessmentRouter)
 app.use('/api/files', filesRouter)
