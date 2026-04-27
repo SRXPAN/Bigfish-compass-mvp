@@ -1,5 +1,3 @@
-// packages/shared/src/types/index.ts
-
 // ============================================
 // LOCALIZATION HELPER TYPES
 // ============================================
@@ -16,11 +14,13 @@ export interface LocalizedObject {
   EN: string
 }
 
+export type Lang = 'UA' | 'PL' | 'EN'
+
 // ============================================
 // USER & AUTH TYPES
 // ============================================
 
-export type Role = 'ADMIN' | 'EDITOR' | 'STUDENT'
+export type Role = 'STUDENT' | 'COUNSELOR' | 'ADMIN'
 
 export interface User {
   id: string
@@ -28,8 +28,9 @@ export interface User {
   email: string
   role: Role
   xp: number
+  tokens: number
+  seatsAvailable: number
   avatar?: string | null
-  emailVerified?: boolean
 }
 
 export interface AuthUser extends User {}
@@ -50,126 +51,33 @@ export interface AuthResponse {
 }
 
 // ============================================
-// TOPIC & MATERIAL TYPES
+// ASSESSMENT (SAAS) TYPES
 // ============================================
 
-export type Category = 'Programming' | 'Mathematics' | 'Databases' | 'Networks' | 'WebDevelopment' | 'MobileDevelopment' | 'MachineLearning' | 'Security' | 'DevOps' | 'OperatingSystems'
-export type MaterialType = 'pdf' | 'video' | 'link' | 'text'
-export type Lang = 'UA' | 'PL' | 'EN'
-export type Status = 'Draft' | 'Published'
-export type Difficulty = 'Easy' | 'Medium' | 'Hard'
+export type QuestionType = 'SINGLE_CHOICE' | 'MULTI_CHOICE' | 'SCALE' | 'TEXT'
+export type SessionStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED'
 
-export interface Material {
-  id: string
-  title: string
-  titleJson?: LocalizedString
-  type: MaterialType
-  url?: string
-  fileId?: string
-  content?: string
-  contentJson?: LocalizedString
-  lang?: Lang
-  status?: Status
-  tags?: string[]
-}
-
-export interface QuizLite {
-  id: string
-  title: string
-  titleJson?: LocalizedString
-  durationSec: number
-  status?: Status
-}
-
-export interface TopicLite {
-  id: string
-  name: string
-  nameJson?: LocalizedString
-  quizzes: QuizLite[]
-}
-
-export interface TopicTree {
-  id: string
-  slug: string
-  name: string
-  nameJson?: LocalizedString
-  description?: string
-  descJson?: LocalizedString
-  category?: Category
-  status?: Status
-  materials: Material[]
-  quizzes: QuizLite[]
-  children?: TopicTree[]
-}
-
-// ============================================
-// QUIZ TYPES
-// ============================================
-
-export interface Option {
-  id: string
-  text: string
-  textJson?: LocalizedString
-  correct?: boolean // Only sent to editors/admins
-}
-
-export interface Question {
-  id: string
-  text: string
-  textJson?: LocalizedString
-  explanation?: string
-  explanationJson?: LocalizedString
-  options: Option[]
-  tags: string[]
-  difficulty: Difficulty
-}
-
-export interface Quiz {
-  id: string
-  title: string
-  titleJson?: LocalizedString
-  durationSec: number
-  topicId: string
-  status?: Status
-  token?: string
-  questions: Question[]
-}
-
-export interface QuizAnswer {
+export interface AssessmentResponsePayload {
   questionId: string
-  optionId: string
+  selectedOptions?: string[]
+  scaleValue?: number
+  textValue?: string
 }
 
-export interface QuizSubmitRequest {
-  answers: QuizAnswer[]
-}
-
-export interface QuizSubmitResult {
-  correct: number
-  total: number
-  xpEarned: number
-  correctMap?: Record<string, string>
-  solutions?: Record<string, string>
+export interface AssessmentSubmitRequest {
+  responses: AssessmentResponsePayload[]
 }
 
 // ============================================
-// ACTIVITY TYPES
+// B2B COUNSELOR TYPES
 // ============================================
 
-export interface ActivityLog {
-  date: string // YYYY-MM-DD
-  timeSpent: number // seconds
-  quizAttempts: number
-  materialsViewed: number
-  goalsMet: number
+export interface GenerateAccessCodeRequest {
+  maxUses: number
 }
 
-export interface UserStats {
-  currentStreak: number
-  longestStreak: number
-  totalTimeSpent: number
-  last7DaysActivity: ActivityLog[]
-  lastActiveDate: string
+export interface RedeemAccessCodeRequest {
+  code: string
 }
 
 // ============================================
@@ -187,7 +95,7 @@ export interface ApiSuccess<T = unknown> {
 }
 
 // ============================================
-// TRANSLATION TYPES (for Prisma JSON fields)
+// TRANSLATION TYPES
 // ============================================
 
 export interface TranslationJson {
@@ -198,16 +106,6 @@ export interface TranslationJson {
 
 export type PartialTranslationJson = Partial<TranslationJson>
 
-export interface WeakSpotTranslationJson {
-  topic: TranslationJson
-  advice: TranslationJson
-}
-
-export interface AchievementTranslationJson {
-  name: TranslationJson
-  description: TranslationJson
-}
-
 export function getTranslation(
   json: TranslationJson | PartialTranslationJson | null | undefined,
   lang: Lang,
@@ -215,60 +113,6 @@ export function getTranslation(
 ): string {
   if (!json) return fallback
   return json[lang] ?? json['EN'] ?? fallback
-}
-
-// ============================================
-// EDITOR TYPES
-// ============================================
-
-export interface CreateTopicRequest {
-  name: string
-  slug: string
-  description?: string
-  parentId?: string
-  category?: Category
-}
-
-export interface UpdateTopicRequest {
-  name?: string
-  slug?: string
-  description?: string
-  parentId?: string | null
-  category?: Category
-  publish?: boolean
-}
-
-export interface CreateMaterialRequest {
-  title: string
-  type: MaterialType
-  url?: string
-  content?: string
-  lang?: Lang
-  publish?: boolean
-}
-
-export interface UpdateMaterialRequest {
-  title?: string
-  type?: MaterialType
-  url?: string
-  content?: string
-  lang?: Lang
-  publish?: boolean
-  status?: Status
-}
-
-export interface CreateQuizRequest {
-  title: string
-  durationSec?: number
-  publish?: boolean
-}
-
-export interface CreateQuestionRequest {
-  text: string
-  explanation?: string
-  difficulty?: Difficulty
-  tags?: string[]
-  options: Array<{ text: string; correct: boolean }>
 }
 
 // ============================================
